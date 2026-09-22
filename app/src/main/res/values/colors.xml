@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="oled_black">#000000</color>
+    <color name="night_amber">#FFA726</color>
+    <color name="night_red">#FF7043</color>
+    <color name="ambient_surface">#121212</color>
+    <color name="primary_accent">#8AB4F8</color>
+</resources>

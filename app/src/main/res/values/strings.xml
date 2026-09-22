@@ -1,0 +1,47 @@
+<resources>
+    <string name="app_name">Wireless Smart Display</string>
+    <string name="dream_name">Wireless Smart Display</string>
+    <string name="dream_description">OLED Smart Display screen saver optimized for wireless charging docks and nightstands.</string>
+    <string name="settings_title">Screen Saver Settings</string>
+    <string name="preview_button">Preview Screen Saver</string>
+    <string name="system_settings_button">System Screen Saver Settings</string>
+    <string name="system_settings_hint">Tap above to ensure \'Wireless Smart Display\' is selected and \'When to start\' is set to \'While charging\'.</string>
+
+    <string name="section_behavior">Charging &amp; Activation</string>
+    <string name="pref_require_propped_up_title">Require Propped Up</string>
+    <string name="pref_require_propped_up_summary">Only stay on when resting on a stand or dock; turn off display when laying flat</string>
+    <string name="pref_min_tilt_angle_title">Minimum Tilt Angle</string>
+    <string name="pref_min_tilt_angle_summary">Elevation angle required to keep display on</string>
+    <string name="pref_wireless_only_title">Wireless Charging Only</string>
+    <string name="pref_wireless_only_summary">Immediately dismiss and turn off screen if charging via USB-C cable</string>
+
+    <string name="section_oled">OLED &amp; Nightstand Display</string>
+    <string name="pref_burn_in_title">Anti-Burn-In Pixel Drift</string>
+    <string name="pref_burn_in_summary">Periodically shifts content slightly every 60 seconds to protect OLED pixels</string>
+    <string name="pref_night_mode_title">Bedside Night Mode</string>
+    <string name="pref_night_mode_summary">Ultra-dim display to prevent eye strain and sleep disturbance</string>
+    <string name="pref_night_color_title">Night Display Color</string>
+    <string name="pref_night_color_summary">Select color tone for bedside clock</string>
+    <string name="pref_tap_to_toggle_title">Tap Screen to Dim</string>
+    <string name="pref_tap_to_toggle_summary">Single tap anywhere on screen switches between normal and night mode</string>
+    <string name="pref_midnight_path_title">Midnight Path Floodlight</string>
+    <string name="pref_midnight_path_summary">Press and hold screen during night mode to illuminate a diffused night-vision lantern. Single tap dismisses; 5-min safety shutoff.</string>
+    <string name="pref_midnight_path_brightness">Initial Glow Brightness</string>
+    <string name="midnight_path_dismiss_hint">Tap anywhere to turn off</string>
+
+    <string name="section_widgets">Modular Widgets</string>
+    <string name="pref_show_seconds_title">Show Seconds</string>
+    <string name="pref_show_seconds_summary">Display real-time seconds on the clock</string>
+    <string name="pref_show_battery_title">Battery &amp; Wireless Info</string>
+    <string name="pref_show_battery_summary">Show battery %, charging speed, and wireless dock status</string>
+    <string name="pref_show_alarm_title">Next Alarm</string>
+    <string name="pref_show_alarm_summary">Display upcoming morning alarm time</string>
+    <string name="pref_show_weather_title">Weather Forecast</string>
+    <string name="pref_show_weather_summary">Show current temperature and conditions via Open-Meteo</string>
+
+    <string name="section_weather">Weather Settings</string>
+    <string name="pref_weather_city_title">Custom City Name</string>
+    <string name="pref_weather_city_summary">Enter city name (e.g. New York, London, Tokyo) or leave blank for auto-coordinates</string>
+    <string name="pref_weather_fahrenheit_title">Use Fahrenheit (°F)</string>
+    <string name="pref_weather_fahrenheit_summary">Switch between Celsius (°C) and Fahrenheit (°F)</string>
+</resources>
