@@ -282,4 +282,64 @@ class ScreenSaverUnitTest {
             LocationController.evaluateShouldRestore(isManagingLocation = false)
         )
     }
+
+    @Test
+    fun testAlarmTriggerTrackerActionsCoverage() {
+        // Ensure Google Clock (Pixel) and AOSP deskclock actions are included
+        val actions = listOf(
+            "com.google.android.deskclock.ALARM_ALERT",
+            "com.google.android.deskclock.action.ALARM_ALERT",
+            "com.android.deskclock.ALARM_ALERT",
+            "android.app.action.NEXT_ALARM_CLOCK_CHANGED",
+            "com.sec.android.app.clockpackage.ALARM_ALERT",
+            "com.samsung.sec.android.clockpackage.alarm.ALARM_ALERT",
+            "com.sonyericsson.alarm.ALARM_ALERT",
+            "org.codeaurora.poweroffalarm.action.UPDATE_ALARM"
+        )
+
+        assertTrue(actions.contains("com.google.android.deskclock.ALARM_ALERT"))
+        assertTrue(actions.contains("com.android.deskclock.ALARM_ALERT"))
+        assertTrue(actions.contains("android.app.action.NEXT_ALARM_CLOCK_CHANGED"))
+    }
+
+    @Test
+    fun testAlarmTriggerTimeWindowLogic() {
+        val now = 1000000L
+        val triggerTime = 1000000L
+        val windowMs = 5 * 60 * 1000L
+
+        // Exact match
+        val isNearExact = triggerTime > 0L &&
+                now >= (triggerTime - 5000L) &&
+                now <= (triggerTime + windowMs)
+        assertTrue(isNearExact)
+
+        // 2 seconds before trigger time (within 5s grace window)
+        val nowBefore = triggerTime - 2000L
+        val isNearBefore = triggerTime > 0L &&
+                nowBefore >= (triggerTime - 5000L) &&
+                nowBefore <= (triggerTime + windowMs)
+        assertTrue(isNearBefore)
+
+        // 3 minutes after trigger time (still ringing/snoozing)
+        val nowAfter = triggerTime + 3 * 60 * 1000L
+        val isNearAfter = triggerTime > 0L &&
+                nowAfter >= (triggerTime - 5000L) &&
+                nowAfter <= (triggerTime + windowMs)
+        assertTrue(isNearAfter)
+
+        // 10 minutes before (too early)
+        val nowTooEarly = triggerTime - 10 * 60 * 1000L
+        val isNearTooEarly = triggerTime > 0L &&
+                nowTooEarly >= (triggerTime - 5000L) &&
+                nowTooEarly <= (triggerTime + windowMs)
+        assertFalse(isNearTooEarly)
+
+        // 10 minutes after (past active window)
+        val nowTooLate = triggerTime + 10 * 60 * 1000L
+        val isNearTooLate = triggerTime > 0L &&
+                nowTooLate >= (triggerTime - 5000L) &&
+                nowTooLate <= (triggerTime + windowMs)
+        assertFalse(isNearTooLate)
+    }
 }

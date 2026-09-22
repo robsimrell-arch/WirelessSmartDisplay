@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.antigravity.screensaver.data.AlarmTriggerTracker
 import com.antigravity.screensaver.data.BatteryStateTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.LocationController
@@ -70,6 +71,8 @@ class WirelessChargingDreamService : DreamService(),
     private var tiltSensorTracker: TiltSensorTracker? = null
     private var tiltJob: Job? = null
     private val isFlatDarkened = MutableStateFlow(false)
+    private var alarmTriggerTracker: AlarmTriggerTracker? = null
+    private var hasGainedWindowFocus = false
 
     private fun applyOrientation(mode: String) {
         val forcedOrientation = when (mode) {
@@ -336,11 +339,15 @@ class WirelessChargingDreamService : DreamService(),
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
+            hasGainedWindowFocus = true
             disconnectDreamOverlay()
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        } else if (hasGainedWindowFocus) {
+            android.util.Log.d("DreamService", "Window focus lost while dreaming. Yielding to foreground activity/alarm.")
+            alarmTriggerTracker?.onWindowFocusLost()
         }
     }
 
@@ -354,6 +361,21 @@ class WirelessChargingDreamService : DreamService(),
         insetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
+
+        // Alarm & Activity yield tracker: ensures Google Clock alarm screen displays immediately
+        alarmTriggerTracker = AlarmTriggerTracker(this) {
+            android.util.Log.i("DreamService", "Alarm/Activity trigger received! Waking up and terminating dream.")
+            try {
+                // Restore preview mode flag so system cleans up normally
+                val dreamClass = DreamService::class.java
+                val previewField = dreamClass.getDeclaredField("mPreviewMode")
+                previewField.isAccessible = true
+                previewField.setBoolean(this, false)
+            } catch (_: Throwable) {}
+            wakeUp()
+            finish()
+        }
+        alarmTriggerTracker?.start()
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
@@ -414,6 +436,9 @@ class WirelessChargingDreamService : DreamService(),
 
     override fun onDreamingStopped() {
         super.onDreamingStopped()
+        alarmTriggerTracker?.stop()
+        alarmTriggerTracker = null
+        hasGainedWindowFocus = false
         tiltJob?.cancel()
         tiltJob = null
         orientationJob?.cancel()
@@ -432,6 +457,8 @@ class WirelessChargingDreamService : DreamService(),
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        alarmTriggerTracker?.stop()
+        alarmTriggerTracker = null
         tiltJob?.cancel()
         tiltJob = null
         orientationJob?.cancel()
@@ -444,6 +471,8 @@ class WirelessChargingDreamService : DreamService(),
 
     override fun onDestroy() {
         super.onDestroy()
+        alarmTriggerTracker?.stop()
+        alarmTriggerTracker = null
         tiltJob?.cancel()
         tiltJob = null
         orientationJob?.cancel()

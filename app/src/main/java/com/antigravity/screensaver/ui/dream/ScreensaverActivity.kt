@@ -25,6 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.antigravity.screensaver.data.AlarmTriggerTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.data.PreferencesManager
@@ -52,6 +53,8 @@ class ScreensaverActivity : ComponentActivity() {
     private var orientationJob: Job? = null
     private var tiltJob: Job? = null
     private val isFlatDarkened = MutableStateFlow(false)
+    private var alarmTriggerTracker: AlarmTriggerTracker? = null
+    private var hasGainedFocus = false
 
     companion object {
         const val EXTRA_LAUNCH_TARGET = "com.antigravity.screensaver.EXTRA_LAUNCH_TARGET"
@@ -168,6 +171,22 @@ class ScreensaverActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        alarmTriggerTracker = AlarmTriggerTracker(this) {
+            android.util.Log.i("ScreensaverActivity", "Alarm event detected! Finishing ScreensaverActivity to reveal AlarmActivity.")
+            finish()
+        }
+        alarmTriggerTracker?.start()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        alarmTriggerTracker?.stop()
+        alarmTriggerTracker = null
+        hasGainedFocus = false
+    }
+
     override fun onResume() {
         super.onResume()
         hideSystemBars()
@@ -176,7 +195,11 @@ class ScreensaverActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
+            hasGainedFocus = true
             hideSystemBars()
+        } else if (hasGainedFocus) {
+            android.util.Log.d("ScreensaverActivity", "Window focus lost. Yielding to foreground activity/alarm.")
+            alarmTriggerTracker?.onWindowFocusLost()
         }
     }
 
@@ -478,6 +501,8 @@ class ScreensaverActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        alarmTriggerTracker?.stop()
+        alarmTriggerTracker = null
         orientationJob?.cancel()
         orientationJob = null
         tiltJob?.cancel()
