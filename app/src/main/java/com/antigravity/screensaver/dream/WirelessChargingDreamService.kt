@@ -52,6 +52,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 
@@ -346,8 +347,15 @@ class WirelessChargingDreamService : DreamService(),
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
         } else if (hasGainedWindowFocus) {
-            android.util.Log.d("DreamService", "Window focus lost while dreaming. Yielding to foreground activity/alarm.")
-            alarmTriggerTracker?.onWindowFocusLost()
+            android.util.Log.i("DreamService", "Window focus lost while dreaming. Terminating dream to reveal alarm or foreground activity.")
+            try {
+                val dreamClass = DreamService::class.java
+                val previewField = dreamClass.getDeclaredField("mPreviewMode")
+                previewField.isAccessible = true
+                previewField.setBoolean(this, false)
+            } catch (_: Throwable) {}
+            wakeUp()
+            finish()
         }
     }
 
@@ -427,7 +435,7 @@ class WirelessChargingDreamService : DreamService(),
                 tiltSensorTracker?.proppedUpStateFlow(
                     thresholdDegrees = settings.minTiltAngleDegrees,
                     flatGracePeriodMs = 2000L
-                )?.collect { isProppedUp ->
+                )?.distinctUntilChanged()?.collect { isProppedUp ->
                     applyPostureState(isProppedUp)
                 }
             }

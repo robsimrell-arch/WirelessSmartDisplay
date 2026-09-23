@@ -12,6 +12,7 @@ import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.model.DisplaySettings
 import com.antigravity.screensaver.model.ThermostatInfo
 import com.antigravity.screensaver.model.ThermostatMode
+import com.antigravity.screensaver.ui.dream.ScreensaverActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -418,6 +419,23 @@ class ScreenSaverUnitTest {
                 isAudioAlarm = false,
                 isAlarmActive = true
             )
+        )
+    }
+
+    @Test
+    fun testScreensaverActivityFocusYieldEvaluation() {
+        // When user is navigating to a child activity (Settings, Clock, or Google Home),
+        // ScreensaverActivity must NOT yield, so it remains in the back stack!
+        assertFalse(
+            "Must NOT yield when navigating to child activity",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isNavigatingToChild = true)
+        )
+
+        // When focus is lost externally (e.g. morning alarm from Google Clock or incoming call),
+        // ScreensaverActivity MUST yield immediately to reveal the alarm/call!
+        assertTrue(
+            "Must yield when an external alarm takes focus",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isNavigatingToChild = false)
         )
     }
 }

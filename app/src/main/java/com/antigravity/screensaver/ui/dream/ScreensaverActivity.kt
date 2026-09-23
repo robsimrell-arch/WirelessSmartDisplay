@@ -58,6 +58,7 @@ class ScreensaverActivity : ComponentActivity() {
     private var alarmTriggerTracker: AlarmTriggerTracker? = null
     private var hasGainedFocus = false
     private var lastBackPressTime = 0L
+    private var isNavigatingToChild = false
 
     companion object {
         const val EXTRA_LAUNCH_TARGET = "com.antigravity.screensaver.EXTRA_LAUNCH_TARGET"
@@ -67,6 +68,15 @@ class ScreensaverActivity : ComponentActivity() {
         const val TARGET_SETTINGS = "settings"
         const val TARGET_CLOCK = "clock"
         const val TARGET_SMART_HOME = "smart_home"
+
+        /**
+         * Evaluates whether focus loss on ScreensaverActivity should yield and finish.
+         * Yields if an external activity (e.g. morning alarm, incoming call) took focus.
+         * Does NOT yield if the user intentionally launched a child activity (Settings/Clock/Home).
+         */
+        fun evaluateShouldYieldOnFocusLost(isNavigatingToChild: Boolean): Boolean {
+            return !isNavigatingToChild
+        }
 
         /**
          * Universal launch helper to route actions through ScreensaverActivity.
@@ -206,6 +216,7 @@ class ScreensaverActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        isNavigatingToChild = false
         hideSystemBars()
     }
 
@@ -213,9 +224,15 @@ class ScreensaverActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             hasGainedFocus = true
+            isNavigatingToChild = false
             hideSystemBars()
+        } else if (hasGainedFocus && evaluateShouldYieldOnFocusLost(isNavigatingToChild)) {
+            // An external full-screen window (Google Clock AlarmActivity or incoming phone call)
+            // took window focus over ScreensaverActivity! Yield immediately so the alarm is visible.
+            android.util.Log.i("ScreensaverActivity", "External activity/alarm took window focus. Yielding to reveal alarm.")
+            finish()
         } else {
-            android.util.Log.d("ScreensaverActivity", "Window focus lost to foreground activity or system dialog. Keeping screensaver alive in back stack.")
+            android.util.Log.d("ScreensaverActivity", "Focus lost to child activity (Settings/Clock/Home). Keeping screensaver alive in back stack.")
         }
     }
 
@@ -253,9 +270,11 @@ class ScreensaverActivity : ComponentActivity() {
      */
     fun launchSettings() {
         try {
+            isNavigatingToChild = true
             val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
         } catch (e: Exception) {
+            isNavigatingToChild = false
             android.util.Log.e("ScreensaverActivity", "Failed to launch Settings: ${e.message}")
         }
     }
@@ -265,6 +284,7 @@ class ScreensaverActivity : ComponentActivity() {
      * Leaves ScreensaverActivity active in the task stack beneath the Clock app.
      */
     fun launchClockTarget() {
+        isNavigatingToChild = true
         dismissKeyguardAndRun {
             performLaunchClock()
         }
@@ -369,6 +389,7 @@ class ScreensaverActivity : ComponentActivity() {
      * Leaves ScreensaverActivity active in the task stack beneath the smart home app.
      */
     fun launchSmartHomeTarget(provider: String? = null) {
+        isNavigatingToChild = true
         dismissKeyguardAndRun {
             performLaunchSmartHome(provider)
         }
@@ -474,10 +495,12 @@ class ScreensaverActivity : ComponentActivity() {
                     }
 
                     override fun onDismissCancelled() {
+                        isNavigatingToChild = false
                         android.util.Log.d("ScreensaverActivity", "Keyguard dismissal cancelled")
                     }
 
                     override fun onDismissError() {
+                        isNavigatingToChild = false
                         action()
                     }
                 })
