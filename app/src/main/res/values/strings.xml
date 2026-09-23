@@ -22,8 +22,8 @@
     <string name="pref_night_mode_summary">Ultra-dim display to prevent eye strain and sleep disturbance</string>
     <string name="pref_night_color_title">Night Display Color</string>
     <string name="pref_night_color_summary">Select color tone for bedside clock</string>
-    <string name="pref_tap_to_toggle_title">Tap Screen to Dim</string>
-    <string name="pref_tap_to_toggle_summary">Single tap anywhere on screen switches between normal and night mode</string>
+    <string name="pref_tap_to_toggle_title">Tap to Toggle Night Mode</string>
+    <string name="pref_tap_to_toggle_summary">Single tap anywhere on screen switches between full-color display and bedside night mode</string>
     <string name="pref_midnight_path_title">Midnight Path Floodlight</string>
     <string name="pref_midnight_path_summary">Press and hold screen during night mode to illuminate a diffused night-vision lantern. Single tap dismisses; 5-min safety shutoff.</string>
     <string name="pref_midnight_path_brightness">Initial Glow Brightness</string>
@@ -31,7 +31,7 @@
 
     <string name="section_widgets">Modular Widgets</string>
     <string name="pref_show_seconds_title">Show Seconds</string>
-    <string name="pref_show_seconds_summary">Display real-time seconds on the clock</string>
+    <string name="pref_show_seconds_summary">Display real-time seconds on the clock (hidden in night mode)</string>
     <string name="pref_show_battery_title">Battery &amp; Wireless Info</string>
     <string name="pref_show_battery_summary">Show battery %, charging speed, and wireless dock status</string>
     <string name="pref_show_alarm_title">Next Alarm</string>
@@ -42,6 +42,9 @@
     <string name="section_weather">Weather Settings</string>
     <string name="pref_weather_city_title">Custom City Name</string>
     <string name="pref_weather_city_summary">Enter city name (e.g. New York, London, Tokyo) or leave blank for auto-coordinates</string>
+    <string name="pref_weather_unit_title">Temperature Unit</string>
+    <string name="pref_unit_fahrenheit">Fahrenheit (°F)</string>
+    <string name="pref_unit_celsius">Celsius (°C)</string>
     <string name="pref_weather_fahrenheit_title">Use Fahrenheit (°F)</string>
     <string name="pref_weather_fahrenheit_summary">Switch between Celsius (°C) and Fahrenheit (°F)</string>
 </resources>

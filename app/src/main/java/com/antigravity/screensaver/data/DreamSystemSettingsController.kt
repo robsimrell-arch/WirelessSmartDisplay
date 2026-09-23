@@ -10,7 +10,7 @@ import android.util.Log
  * the screensaver can activate while charging via cable or wireless dock.
  *
  * Specifically addresses a Google Pixel / Android 15 issue where the OS sets
- * `screensaver_restrict_to_writeless_charging = 1` and `screensaver_activate_on_sleep = 0`
+ * `screensaver_restrict_to_wireless_charging = 1` and `screensaver_activate_on_sleep = 0`
  * by default if a wireless charging dock/stand was ever used, which prevents the screensaver
  * from activating on wired cable charging.
  */
@@ -42,7 +42,7 @@ class DreamSystemSettingsController(private val context: Context) {
         return try {
             val resolver = context.contentResolver
             val activateOnSleep = Settings.Secure.getInt(resolver, "screensaver_activate_on_sleep", 0)
-            val restrictToWireless = Settings.Secure.getInt(resolver, "screensaver_restrict_to_writeless_charging", 0)
+            val restrictToWireless = Settings.Secure.getInt(resolver, "screensaver_restrict_to_wireless_charging", 0)
             val screensaverEnabled = Settings.Secure.getInt(resolver, "screensaver_enabled", 0)
             screensaverEnabled == 1 && activateOnSleep == 1 && restrictToWireless == 0
         } catch (e: Exception) {
@@ -71,7 +71,7 @@ class DreamSystemSettingsController(private val context: Context) {
 
             // 3. Configure wireless-only restriction (0 allows wired, 1 restricts to wireless)
             val restrictValue = if (wirelessOnly) 1 else 0
-            Settings.Secure.putInt(resolver, "screensaver_restrict_to_writeless_charging", restrictValue)
+            Settings.Secure.putInt(resolver, "screensaver_restrict_to_wireless_charging", restrictValue)
 
             // 4. Ensure our DreamService is registered as active component
             val currentComponent = Settings.Secure.getString(resolver, "screensaver_components")

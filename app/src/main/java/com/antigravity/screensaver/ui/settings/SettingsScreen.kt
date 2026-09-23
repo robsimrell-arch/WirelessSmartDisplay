@@ -314,291 +314,293 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 onCheckedChange = { update(settings.copy(nightModeEnabled = it)) }
             )
 
-            // Night Display Color Palette Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.pref_night_color_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimaryWhite
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.pref_night_color_summary),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryMuted
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
+            if (settings.nightModeEnabled) {
+                // Night Display Color Palette Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = stringResource(R.string.pref_night_color_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimaryWhite
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.pref_night_color_summary),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondaryMuted
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        NightColor.entries.forEach { colorOption ->
-                            val isSelected = settings.nightColor.equals(colorOption.id, ignoreCase = true)
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        update(settings.copy(nightColor = colorOption.id))
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 2.dp)
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NightColor.entries.forEach { colorOption ->
+                                val isSelected = settings.nightColor.equals(colorOption.id, ignoreCase = true)
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
-                                        .size(46.dp)
-                                        .then(
-                                            if (isSelected) {
-                                                Modifier.border(
-                                                    width = 2.5.dp,
-                                                    color = Color.White,
-                                                    shape = CircleShape
-                                                )
-                                            } else {
-                                                Modifier.border(
-                                                    width = 1.dp,
-                                                    color = Color.White.copy(alpha = 0.2f),
-                                                    shape = CircleShape
-                                                )
-                                            }
-                                        )
-                                        .padding(4.dp)
-                                        .background(colorOption.primaryColor, CircleShape)
+                                        .clickable {
+                                            update(settings.copy(nightColor = colorOption.id))
+                                        }
+                                        .padding(vertical = 4.dp, horizontal = 2.dp)
                                 ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = "Selected",
-                                            tint = if (colorOption == NightColor.WARM_WHITE) Color.Black else Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .then(
+                                                if (isSelected) {
+                                                    Modifier.border(
+                                                        width = 2.5.dp,
+                                                        color = Color.White,
+                                                        shape = CircleShape
+                                                    )
+                                                } else {
+                                                    Modifier.border(
+                                                        width = 1.dp,
+                                                        color = Color.White.copy(alpha = 0.2f),
+                                                        shape = CircleShape
+                                                    )
+                                                }
+                                            )
+                                            .padding(4.dp)
+                                            .background(colorOption.primaryColor, CircleShape)
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = "Selected",
+                                                tint = if (colorOption == NightColor.WARM_WHITE) Color.Black else Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = colorOption.label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) TextPrimaryWhite else TextSecondaryMuted
+                                    )
                                 }
-                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+                        }
+                    }
+                }
+
+                SettingsToggleItem(
+                    title = stringResource(R.string.pref_tap_to_toggle_title),
+                    summary = stringResource(R.string.pref_tap_to_toggle_summary),
+                    checked = settings.tapToToggleNight,
+                    onCheckedChange = { update(settings.copy(tapToToggleNight = it)) }
+                )
+
+                // Midnight Path Floodlight Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
                                 Text(
-                                    text = colorOption.label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) TextPrimaryWhite else TextSecondaryMuted
+                                    text = stringResource(R.string.pref_midnight_path_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimaryWhite
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = stringResource(R.string.pref_midnight_path_summary),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondaryMuted
+                                )
+                            }
+                            Switch(
+                                checked = settings.enableMidnightPath,
+                                onCheckedChange = { update(settings.copy(enableMidnightPath = it)) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = PixelBlue
+                                )
+                            )
+                        }
+
+                        if (settings.enableMidnightPath) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.pref_midnight_path_brightness),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = TextPrimaryWhite,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${(settings.midnightPathBrightness * 100).roundToInt()}%",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = settings.activeNightColor.primaryColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Slider(
+                                value = settings.midnightPathBrightness,
+                                onValueChange = { update(settings.copy(midnightPathBrightness = it)) },
+                                valueRange = 0.20f..1.0f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = settings.activeNightColor.primaryColor,
+                                    activeTrackColor = settings.activeNightColor.primaryColor,
+                                    inactiveTrackColor = settings.activeNightColor.primaryColor.copy(alpha = 0.25f)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                SettingsToggleItem(
+                    title = "Do Not Disturb in Night Mode",
+                    summary = "Automatically turn on Priority DND during night mode; restores previous state on wake or when room lights turn on.",
+                    checked = settings.enableDndInNightMode,
+                    onCheckedChange = { update(settings.copy(enableDndInNightMode = it)) }
+                )
+
+                if (settings.enableDndInNightMode && !hasDndPermission) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0x33FF9800)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { dndController.openPermissionSettings(context) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = Color(0xFFFFB74D),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "DND Permission Required",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Color(0xFFFFB74D),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Tap here to grant Do Not Disturb access in Android Settings so screensaver can manage DND.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimaryWhite
                                 )
                             }
                         }
                     }
                 }
-            }
 
-            SettingsToggleItem(
-                title = stringResource(R.string.pref_tap_to_toggle_title),
-                summary = stringResource(R.string.pref_tap_to_toggle_summary),
-                checked = settings.tapToToggleNight,
-                onCheckedChange = { update(settings.copy(tapToToggleNight = it)) }
-            )
+                SettingsToggleItem(
+                    title = "Mute Location in Night Mode",
+                    summary = "Temporarily turns off Location during night mode to eliminate the flashing blue privacy indicator dot; restores location when waking up or room lights turn on.",
+                    checked = settings.muteLocationInNightMode,
+                    onCheckedChange = { update(settings.copy(muteLocationInNightMode = it)) }
+                )
 
-            // Midnight Path Floodlight Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                if (settings.muteLocationInNightMode && !hasLocationPermission) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0x332196F3)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                            Text(
-                                text = stringResource(R.string.pref_midnight_path_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimaryWhite
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.Info,
+                                contentDescription = null,
+                                tint = PixelBlue,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.pref_midnight_path_summary),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondaryMuted
-                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Location Permission Required",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = PixelBlue,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Grant privileged setting access via ADB:\nadb shell pm grant com.antigravity.screensaver android.permission.WRITE_SECURE_SETTINGS",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimaryWhite
+                                )
+                            }
                         }
-                        Switch(
-                            checked = settings.enableMidnightPath,
-                            onCheckedChange = { update(settings.copy(enableMidnightPath = it)) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = PixelBlue
-                            )
-                        )
                     }
+                }
 
-                    if (settings.enableMidnightPath) {
-                        Spacer(modifier = Modifier.height(16.dp))
+                // Night Mode Brightness Dimmer Card
+                val activeNightColor = settings.activeNightColor.primaryColor
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = stringResource(R.string.pref_midnight_path_brightness),
-                                style = MaterialTheme.typography.titleSmall,
+                                text = "Night Mode Dimmer",
+                                style = MaterialTheme.typography.titleMedium,
                                 color = TextPrimaryWhite,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "${(settings.midnightPathBrightness * 100).roundToInt()}%",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = settings.activeNightColor.primaryColor,
+                                text = "${(settings.nightBrightness * 100).roundToInt()}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = activeNightColor,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Dims night clock elements down to complete black (0% to 100%). Can also swipe vertically on ambient display.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondaryMuted
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Slider(
-                            value = settings.midnightPathBrightness,
-                            onValueChange = { update(settings.copy(midnightPathBrightness = it)) },
-                            valueRange = 0.20f..1.0f,
+                            value = settings.nightBrightness,
+                            onValueChange = { update(settings.copy(nightBrightness = it)) },
+                            valueRange = 0.0f..1.0f,
                             colors = SliderDefaults.colors(
-                                thumbColor = settings.activeNightColor.primaryColor,
-                                activeTrackColor = settings.activeNightColor.primaryColor,
-                                inactiveTrackColor = settings.activeNightColor.primaryColor.copy(alpha = 0.25f)
+                                thumbColor = activeNightColor,
+                                activeTrackColor = activeNightColor,
+                                inactiveTrackColor = activeNightColor.copy(alpha = 0.25f)
                             )
                         )
                     }
-                }
-            }
-
-            SettingsToggleItem(
-                title = "Do Not Disturb in Night Mode",
-                summary = "Automatically turn on Priority DND during night mode; restores previous state on wake or when room lights turn on.",
-                checked = settings.enableDndInNightMode,
-                onCheckedChange = { update(settings.copy(enableDndInNightMode = it)) }
-            )
-
-            if (settings.enableDndInNightMode && !hasDndPermission) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0x33FF9800)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { dndController.openPermissionSettings(context) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Rounded.Info,
-                            contentDescription = null,
-                            tint = Color(0xFFFFB74D),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "DND Permission Required",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color(0xFFFFB74D),
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Tap here to grant Do Not Disturb access in Android Settings so screensaver can manage DND.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextPrimaryWhite
-                            )
-                        }
-                    }
-                }
-            }
-
-            SettingsToggleItem(
-                title = "Mute Location in Night Mode",
-                summary = "Temporarily turns off Location during night mode to eliminate the flashing blue privacy indicator dot; restores location when waking up or room lights turn on.",
-                checked = settings.muteLocationInNightMode,
-                onCheckedChange = { update(settings.copy(muteLocationInNightMode = it)) }
-            )
-
-            if (settings.muteLocationInNightMode && !hasLocationPermission) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0x332196F3)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Rounded.Info,
-                            contentDescription = null,
-                            tint = PixelBlue,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Location Permission Required",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = PixelBlue,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Grant privileged setting access via ADB:\nadb shell pm grant com.antigravity.screensaver android.permission.WRITE_SECURE_SETTINGS",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextPrimaryWhite
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Night Mode Brightness Dimmer Card
-            val activeNightColor = settings.activeNightColor.primaryColor
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Night Mode Dimmer",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimaryWhite,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${(settings.nightBrightness * 100).roundToInt()}%",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = activeNightColor,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Dims night clock elements down to complete black (0% to 100%). Can also swipe vertically on ambient display.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondaryMuted
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Slider(
-                        value = settings.nightBrightness,
-                        onValueChange = { update(settings.copy(nightBrightness = it)) },
-                        valueRange = 0.0f..1.0f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = activeNightColor,
-                            activeTrackColor = activeNightColor,
-                            inactiveTrackColor = activeNightColor.copy(alpha = 0.25f)
-                        )
-                    )
                 }
             }
 
@@ -712,12 +714,111 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             )
 
             if (settings.showWeather) {
-                SettingsToggleItem(
-                    title = "Show Tomorrow's Forecast",
-                    summary = "Display tomorrow's condition and high/low range on a second line",
-                    checked = settings.showTomorrowWeather,
-                    onCheckedChange = { update(settings.copy(showTomorrowWeather = it)) }
-                )
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = settings.customCity,
+                            onValueChange = { update(settings.copy(customCity = it)) },
+                            label = { Text("Custom City (leave blank for local)") },
+                            placeholder = { Text("e.g. Chicago, London", color = TextSecondaryMuted) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimaryWhite,
+                                unfocusedTextColor = TextPrimaryWhite,
+                                focusedBorderColor = PixelBlue,
+                                unfocusedBorderColor = Color(0x44FFFFFF)
+                            )
+                        )
+
+                        // Temperature Unit Segmented Selector
+                        Column {
+                            Text(
+                                text = stringResource(R.string.pref_weather_unit_title),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = TextPrimaryWhite
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val isF = settings.useFahrenheit
+                                Surface(
+                                    onClick = { update(settings.copy(useFahrenheit = true)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isF) PixelBlue else Color(0x22FFFFFF),
+                                    modifier = Modifier.weight(1f).height(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = stringResource(R.string.pref_unit_fahrenheit),
+                                            color = if (isF) OledBlack else TextPrimaryWhite,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isF) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    onClick = { update(settings.copy(useFahrenheit = false)) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (!isF) PixelBlue else Color(0x22FFFFFF),
+                                    modifier = Modifier.weight(1f).height(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = stringResource(R.string.pref_unit_celsius),
+                                            color = if (!isF) OledBlack else TextPrimaryWhite,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (!isF) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Tomorrow's Forecast Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    text = "Show Tomorrow's Forecast",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimaryWhite
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Display tomorrow's condition and high/low range on a second line",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondaryMuted
+                                )
+                            }
+                            Switch(
+                                checked = settings.showTomorrowWeather,
+                                onCheckedChange = { update(settings.copy(showTomorrowWeather = it)) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = OledBlack,
+                                    checkedTrackColor = PixelBlue,
+                                    uncheckedThumbColor = TextSecondaryMuted,
+                                    uncheckedTrackColor = Color(0x33888888)
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             SettingsToggleItem(
@@ -812,35 +913,6 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 onCheckedChange = { update(settings.copy(showBrownNoise = it)) }
             )
 
-            // Weather Customization Section
-            if (settings.showWeather) {
-                SectionHeader(
-                    title = stringResource(R.string.section_weather),
-                    icon = Icons.Rounded.Cloud
-                )
-
-                OutlinedTextField(
-                    value = settings.customCity,
-                    onValueChange = { update(settings.copy(customCity = it)) },
-                    label = { Text("Custom City (e.g. Chicago, London)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimaryWhite,
-                        unfocusedTextColor = TextPrimaryWhite,
-                        focusedBorderColor = PixelBlue,
-                        unfocusedBorderColor = Color(0x44FFFFFF)
-                    )
-                )
-
-                SettingsToggleItem(
-                    title = stringResource(R.string.pref_weather_fahrenheit_title),
-                    summary = stringResource(R.string.pref_weather_fahrenheit_summary),
-                    checked = settings.useFahrenheit,
-                    onCheckedChange = { update(settings.copy(useFahrenheit = it)) }
-                )
-            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }

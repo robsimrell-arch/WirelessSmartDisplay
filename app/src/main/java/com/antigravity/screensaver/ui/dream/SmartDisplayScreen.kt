@@ -111,6 +111,10 @@ fun SmartDisplayScreen(
         }
     }
 
+    LaunchedEffect(settings.nightBrightness) {
+        nightBrightness = settings.nightBrightness
+    }
+
     val coroutineScope = rememberCoroutineScope()
     var hideIndicatorJob by remember { mutableStateOf<Job?>(null) }
 
@@ -129,6 +133,7 @@ fun SmartDisplayScreen(
         }
     }
 
+    // Location muting during night mode
     LaunchedEffect(nightMode, settings.muteLocationInNightMode) {
         if (settings.muteLocationInNightMode) {
             if (nightMode) {
@@ -141,25 +146,31 @@ fun SmartDisplayScreen(
         }
     }
 
-    LaunchedEffect(settings.enableDndInNightMode) {
-        if (lightTracker.hasSensor) {
-            lightTracker.ambientLightFlow().collect { isDark ->
-                nightMode = isDark
-                if (settings.enableDndInNightMode) {
-                    if (isDark) {
-                        dndController.activateDnd()
-                    } else {
-                        dndController.deactivateDnd()
-                    }
-                } else {
-                    dndController.deactivateDnd()
-                }
-            }
-        } else {
-            if (settings.enableDndInNightMode && nightMode) {
+    // DND sync with nightMode
+    LaunchedEffect(nightMode, settings.enableDndInNightMode) {
+        if (settings.enableDndInNightMode) {
+            if (nightMode) {
                 dndController.activateDnd()
             } else {
                 dndController.deactivateDnd()
+            }
+        } else {
+            dndController.deactivateDnd()
+        }
+    }
+
+    // Ambient light sensor: Gated by nightModeEnabled master toggle
+    LaunchedEffect(settings.nightModeEnabled) {
+        if (!settings.nightModeEnabled) {
+            nightMode = false
+            return@LaunchedEffect
+        }
+
+        if (lightTracker.hasSensor) {
+            lightTracker.ambientLightFlow().collect { isDark ->
+                if (settings.nightModeEnabled) {
+                    nightMode = isDark
+                }
             }
         }
     }
@@ -267,14 +278,14 @@ fun SmartDisplayScreen(
         )
     }
 
-    val tapGestureModifier = Modifier.pointerInput(settings.tapToToggleNight, nightMode, isFloodlightActive, settings.enableMidnightPath) {
+    val tapGestureModifier = Modifier.pointerInput(settings.nightModeEnabled, settings.tapToToggleNight, nightMode, isFloodlightActive, settings.enableMidnightPath) {
         detectTapGestures(
             onTap = {
                 if (isFloodlightActive) {
                     isFloodlightActive = false
                     floodlightTimeoutJob?.cancel()
                     showBrightnessIndicator = false
-                } else if (settings.tapToToggleNight) {
+                } else if (settings.nightModeEnabled && settings.tapToToggleNight) {
                     nightMode = !nightMode
                     showBrightnessIndicator = false
                 }

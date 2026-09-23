@@ -46,13 +46,14 @@ fun WeatherWidget(
     showTomorrow: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val displayWeather = weatherInfo.forUnit(useFahrenheit)
     val containerBg = if (nightMode) Color(0x22FFA726) else SurfaceCard
     val primaryColor = if (nightMode) NightAmber else PixelBlue
     val secondaryColor = if (nightMode) NightDimAmber else TextSecondaryMuted
     val textColor = if (nightMode) NightAmber else TextPrimaryWhite
 
-    val currentWeatherIcon = getWeatherIcon(weatherInfo.weatherCode)
-    val tomorrowWeatherIcon = getWeatherIcon(weatherInfo.tomorrowWeatherCode)
+    val currentWeatherIcon = getWeatherIcon(displayWeather.weatherCode)
+    val tomorrowWeatherIcon = getWeatherIcon(displayWeather.tomorrowWeatherCode)
     val unitSymbol = if (useFahrenheit) "°F" else "°C"
 
     Column(
@@ -64,7 +65,7 @@ fun WeatherWidget(
         Column {
             // 1. City Name placed at the very top, above temperature
             Text(
-                text = weatherInfo.cityName,
+                text = displayWeather.cityName,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = secondaryColor,
@@ -88,7 +89,7 @@ fun WeatherWidget(
                 ) {
                     Icon(
                         imageVector = currentWeatherIcon,
-                        contentDescription = weatherInfo.conditionDescription,
+                        contentDescription = displayWeather.conditionDescription,
                         tint = primaryColor,
                         modifier = Modifier.size(18.dp)
                     )
@@ -97,7 +98,7 @@ fun WeatherWidget(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = "${weatherInfo.temperature.roundToInt()}$unitSymbol",
+                    text = "${displayWeather.temperature.roundToInt()}$unitSymbol",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = textColor
@@ -108,7 +109,7 @@ fun WeatherWidget(
 
             // 3. Condition name placed below temperature
             Text(
-                text = weatherInfo.conditionDescription,
+                text = displayWeather.conditionDescription,
                 fontSize = 11.5.sp,
                 fontWeight = FontWeight.Medium,
                 color = textColor,
@@ -117,7 +118,7 @@ fun WeatherWidget(
         }
 
         // 4. Tomorrow's Forecast Strip at the bottom
-        if (showTomorrow && weatherInfo.hasTomorrowForecast) {
+        if (showTomorrow && displayWeather.hasTomorrowForecast) {
             Spacer(modifier = Modifier.height(6.dp))
 
             Box(
@@ -151,7 +152,7 @@ fun WeatherWidget(
                     }
 
                     Text(
-                        text = "${weatherInfo.tomorrowTempMax.roundToInt()}° / ${weatherInfo.tomorrowTempMin.roundToInt()}°",
+                        text = "${displayWeather.tomorrowTempMax.roundToInt()}° / ${displayWeather.tomorrowTempMin.roundToInt()}°",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = secondaryColor

@@ -86,5 +86,30 @@ data class WeatherInfo(
     val tomorrowTempMax: Float = 0f,
     val tomorrowTempMin: Float = 0f,
     val tomorrowConditionDescription: String = "",
-    val hasTomorrowForecast: Boolean = false
-)
+    val hasTomorrowForecast: Boolean = false,
+    val isFahrenheit: Boolean = false
+) {
+    fun toFahrenheit(): WeatherInfo {
+        if (isFahrenheit) return this
+        return copy(
+            temperature = temperature * 9f / 5f + 32f,
+            tomorrowTempMax = tomorrowTempMax * 9f / 5f + 32f,
+            tomorrowTempMin = tomorrowTempMin * 9f / 5f + 32f,
+            isFahrenheit = true
+        )
+    }
+
+    fun toCelsius(): WeatherInfo {
+        if (!isFahrenheit) return this
+        return copy(
+            temperature = (temperature - 32f) * 5f / 9f,
+            tomorrowTempMax = (tomorrowTempMax - 32f) * 5f / 9f,
+            tomorrowTempMin = (tomorrowTempMin - 32f) * 5f / 9f,
+            isFahrenheit = false
+        )
+    }
+
+    fun forUnit(useFahrenheit: Boolean): WeatherInfo {
+        return if (useFahrenheit) toFahrenheit() else toCelsius()
+    }
+}

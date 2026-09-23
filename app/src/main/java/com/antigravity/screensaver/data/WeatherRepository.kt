@@ -12,14 +12,16 @@ import java.net.URLEncoder
 
 class WeatherRepository {
 
-    private var cachedWeather: WeatherInfo? = null
+    private var cachedBaseWeather: WeatherInfo? = null
+    private var cachedCityQuery: String = ""
     private var lastFetchTimeMs: Long = 0
     private val cacheDurationMs: Long = 30 * 60 * 1000 // 30 minutes
 
     suspend fun getWeather(cityName: String, useFahrenheit: Boolean): WeatherInfo = withContext(Dispatchers.IO) {
+        val trimmedCity = cityName.trim()
         val now = System.currentTimeMillis()
-        if (cachedWeather != null && (now - lastFetchTimeMs < cacheDurationMs) && cachedWeather?.cityName == cityName) {
-            return@withContext cachedWeather!!
+        if (cachedBaseWeather != null && (now - lastFetchTimeMs < cacheDurationMs) && cachedCityQuery.equals(trimmedCity, ignoreCase = true)) {
+            return@withContext cachedBaseWeather!!.forUnit(useFahrenheit)
         }
 
         try {
@@ -27,8 +29,8 @@ class WeatherRepository {
             var lon = -74.0060
             var resolvedName = "Local"
 
-            if (cityName.isNotBlank()) {
-                val geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=${URLEncoder.encode(cityName, "UTF-8")}&count=1"
+            if (trimmedCity.isNotBlank()) {
+                val geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=${URLEncoder.encode(trimmedCity, "UTF-8")}&count=1"
                 val geoJson = httpGet(geoUrl)
                 if (geoJson != null) {
                     val root = JSONObject(geoJson)
@@ -37,13 +39,13 @@ class WeatherRepository {
                         val first = results.getJSONObject(0)
                         lat = first.getDouble("latitude")
                         lon = first.getDouble("longitude")
-                        resolvedName = first.optString("name", cityName)
+                        resolvedName = first.optString("name", trimmedCity)
                     }
                 }
             }
 
-            val tempUnit = if (useFahrenheit) "&temperature_unit=fahrenheit" else ""
-            val forecastUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto$tempUnit"
+            // Always fetch standard Celsius from Open-Meteo and convert dynamically for perfect unit switching
+            val forecastUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto"
             val forecastJson = httpGet(forecastUrl)
 
             if (forecastJson != null) {
@@ -86,28 +88,31 @@ class WeatherRepository {
                         tomorrowTempMax = tomorrowMax,
                         tomorrowTempMin = tomorrowMin,
                         tomorrowConditionDescription = tomorrowCondition,
-                        hasTomorrowForecast = hasTomorrow
+                        hasTomorrowForecast = hasTomorrow,
+                        isFahrenheit = false
                     )
-                    cachedWeather = info
+                    cachedBaseWeather = info
+                    cachedCityQuery = trimmedCity
                     lastFetchTimeMs = now
-                    return@withContext info
+                    return@withContext info.forUnit(useFahrenheit)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        cachedWeather ?: WeatherInfo(
+        cachedBaseWeather?.forUnit(useFahrenheit) ?: WeatherInfo(
             temperature = if (useFahrenheit) 72f else 22f,
             weatherCode = 0,
             conditionDescription = "Clear",
-            cityName = if (cityName.isNotBlank()) cityName else "Local",
+            cityName = if (trimmedCity.isNotBlank()) trimmedCity else "Local",
             isLoaded = false,
             tomorrowWeatherCode = 0,
             tomorrowTempMax = if (useFahrenheit) 75f else 24f,
             tomorrowTempMin = if (useFahrenheit) 55f else 13f,
             tomorrowConditionDescription = "Partly Cloudy",
-            hasTomorrowForecast = true
+            hasTomorrowForecast = true,
+            isFahrenheit = useFahrenheit
         )
     }
 
