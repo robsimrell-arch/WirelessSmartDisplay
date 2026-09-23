@@ -57,6 +57,20 @@ class AlarmTriggerTracker(
 
         // Threshold around scheduled alarm time to consider an alarm "active" (e.g. within 5 minutes)
         private const val ALARM_ACTIVE_WINDOW_MS = 5 * 60 * 1000L
+
+        /**
+         * Evaluates whether a window focus loss should trigger an alarm yield event.
+         * Only triggers if an alarm is actively playing audio, an alarm broadcast was received,
+         * or current time is within the expected scheduled alarm firing window.
+         * Normal focus loss to other activities or dialogs will NOT trigger.
+         */
+        fun evaluateFocusLostShouldTrigger(
+            isNearAlarmTime: Boolean,
+            isAudioAlarm: Boolean,
+            isAlarmActive: Boolean
+        ): Boolean {
+            return isNearAlarmTime || isAudioAlarm || isAlarmActive
+        }
     }
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -108,8 +122,8 @@ class AlarmTriggerTracker(
      * Called when the screensaver or activity loses window focus (hasFocus == false).
      *
      * If an alarm is actively playing audio, or if current time is within the expected
-     * alarm firing window, or if an external top-level activity (e.g. AlarmActivity or
-     * incoming call) has grabbed focus, signals immediate trigger so the screensaver yields.
+     * alarm firing window, or if an alarm broadcast was received, signals immediate trigger
+     * so the screensaver yields. Normal focus loss to other activities will NOT trigger.
      */
     fun onWindowFocusLost() {
         if (!isStarted) return
@@ -121,15 +135,12 @@ class AlarmTriggerTracker(
 
         val isAudioAlarm = isAlarmAudioPlaying()
 
-        Log.d(TAG, "Window focus lost. isNearAlarmTime=$isNearAlarmTime, isAudioAlarm=$isAudioAlarm")
+        Log.d(TAG, "Window focus lost. isNearAlarmTime=$isNearAlarmTime, isAudioAlarm=$isAudioAlarm, isAlarmActive=${_isAlarmActive.value}")
 
-        if (isNearAlarmTime || isAudioAlarm || _isAlarmActive.value) {
+        if (evaluateFocusLostShouldTrigger(isNearAlarmTime, isAudioAlarm, _isAlarmActive.value)) {
             triggerAlarmEvent("Focus lost during active alarm window")
         } else {
-            // Even if slightly outside the exact window, an activity took full-screen focus over us
-            // (e.g., incoming phone call, alarm from another clock app, timer, or user action).
-            // A screensaver must yield to foreground activities!
-            triggerAlarmEvent("Focus lost to foreground activity")
+            Log.d(TAG, "Window focus lost to another activity or dialog (no active alarm). Screensaver remains active in back stack.")
         }
     }
 

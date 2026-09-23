@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.os.BatteryManager
 import android.provider.Settings
+import com.antigravity.screensaver.data.AlarmTriggerTracker
 import com.antigravity.screensaver.data.AmbientLightTracker
 import com.antigravity.screensaver.data.BatteryStateTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
@@ -341,5 +342,82 @@ class ScreenSaverUnitTest {
                 nowTooLate >= (triggerTime - 5000L) &&
                 nowTooLate <= (triggerTime + windowMs)
         assertFalse(isNearTooLate)
+    }
+
+    @Test
+    fun testDoubleBackPressTimingLogic() {
+        val thresholdMs = 2000L
+        var lastBackPressTime = 0L
+
+        fun handleBackPress(pressTime: Long): Boolean {
+            val shouldExit = (pressTime - lastBackPressTime) < thresholdMs
+            if (shouldExit) {
+                return true
+            } else {
+                lastBackPressTime = pressTime
+                return false
+            }
+        }
+
+        // First press at t = 10000ms: Should NOT exit, should show toast and record timestamp
+        assertFalse("First back press should not exit", handleBackPress(10000L))
+        assertEquals(10000L, lastBackPressTime)
+
+        // Second press at t = 11500ms (1.5s later, within 2s): Should EXIT!
+        assertTrue("Second back press within 2s should exit", handleBackPress(11500L))
+
+        // Reset and test slow consecutive presses
+        lastBackPressTime = 0L
+        assertFalse("First press at 20000ms should not exit", handleBackPress(20000L))
+
+        // Third press at t = 22500ms (2.5s later, outside 2s window): Should NOT exit, should reset timestamp
+        assertFalse("Back press after 2s should not exit", handleBackPress(22500L))
+        assertEquals(22500L, lastBackPressTime)
+
+        // Fourth press at t = 23200ms (0.7s later): Should EXIT!
+        assertTrue("Subsequent quick back press within 2s should exit", handleBackPress(23200L))
+    }
+
+    @Test
+    fun testAlarmTriggerTrackerFocusLossEvaluation() {
+        // When opening Settings, Clock, or Google Home, no alarm is active or near -> must NOT trigger!
+        assertFalse(
+            "Normal focus loss when no alarm is active must NOT trigger",
+            AlarmTriggerTracker.evaluateFocusLostShouldTrigger(
+                isNearAlarmTime = false,
+                isAudioAlarm = false,
+                isAlarmActive = false
+            )
+        )
+
+        // If an alarm is near scheduled trigger time -> MUST trigger
+        assertTrue(
+            "Focus loss near scheduled alarm time must trigger",
+            AlarmTriggerTracker.evaluateFocusLostShouldTrigger(
+                isNearAlarmTime = true,
+                isAudioAlarm = false,
+                isAlarmActive = false
+            )
+        )
+
+        // If alarm audio stream is playing -> MUST trigger
+        assertTrue(
+            "Focus loss while alarm audio is playing must trigger",
+            AlarmTriggerTracker.evaluateFocusLostShouldTrigger(
+                isNearAlarmTime = false,
+                isAudioAlarm = true,
+                isAlarmActive = false
+            )
+        )
+
+        // If alarm broadcast was received -> MUST trigger
+        assertTrue(
+            "Focus loss while alarm broadcast state is active must trigger",
+            AlarmTriggerTracker.evaluateFocusLostShouldTrigger(
+                isNearAlarmTime = false,
+                isAudioAlarm = false,
+                isAlarmActive = true
+            )
+        )
     }
 }

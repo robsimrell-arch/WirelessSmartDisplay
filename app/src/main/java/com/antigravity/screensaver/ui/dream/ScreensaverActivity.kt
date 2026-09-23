@@ -2,12 +2,14 @@ package com.antigravity.screensaver.ui.dream
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
+import android.service.dreams.DreamService
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -55,6 +57,7 @@ class ScreensaverActivity : ComponentActivity() {
     private val isFlatDarkened = MutableStateFlow(false)
     private var alarmTriggerTracker: AlarmTriggerTracker? = null
     private var hasGainedFocus = false
+    private var lastBackPressTime = 0L
 
     companion object {
         const val EXTRA_LAUNCH_TARGET = "com.antigravity.screensaver.EXTRA_LAUNCH_TARGET"
@@ -71,8 +74,12 @@ class ScreensaverActivity : ComponentActivity() {
          * Otherwise, launches ScreensaverActivity with singleTop and passes target extras.
          */
         fun launch(context: Context, target: String = TARGET_NONE, provider: String? = null) {
-            if (context is ScreensaverActivity) {
-                context.handleLaunchTarget(target, provider)
+            var ctx = context
+            while (ctx is ContextWrapper && ctx !is DreamService && ctx !is ScreensaverActivity) {
+                ctx = ctx.baseContext
+            }
+            if (ctx is ScreensaverActivity) {
+                ctx.handleLaunchTarget(target, provider)
             } else {
                 val intent = Intent(context, ScreensaverActivity::class.java).apply {
                     putExtra(EXTRA_LAUNCH_TARGET, target)
@@ -82,6 +89,10 @@ class ScreensaverActivity : ComponentActivity() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }
                 context.startActivity(intent)
+                if (ctx is DreamService) {
+                    ctx.wakeUp()
+                    ctx.finish()
+                }
             }
         }
     }
@@ -118,10 +129,16 @@ class ScreensaverActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
-        // Handle Back button: cleanly exit screensaver to Home screen
+        // Handle Back button: require double Back press to exit to Home screen
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                finish()
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressTime < 2000L) {
+                    finish()
+                } else {
+                    lastBackPressTime = now
+                    Toast.makeText(this@ScreensaverActivity, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                }
             }
         })
 
@@ -197,9 +214,8 @@ class ScreensaverActivity : ComponentActivity() {
         if (hasFocus) {
             hasGainedFocus = true
             hideSystemBars()
-        } else if (hasGainedFocus) {
-            android.util.Log.d("ScreensaverActivity", "Window focus lost. Yielding to foreground activity/alarm.")
-            alarmTriggerTracker?.onWindowFocusLost()
+        } else {
+            android.util.Log.d("ScreensaverActivity", "Window focus lost to foreground activity or system dialog. Keeping screensaver alive in back stack.")
         }
     }
 
