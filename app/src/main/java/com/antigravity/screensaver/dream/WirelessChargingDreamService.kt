@@ -23,6 +23,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Rect
 import android.hardware.SensorManager
 import android.os.Build
@@ -110,6 +111,13 @@ class WirelessChargingDreamService : DreamService(),
             val lp = window.attributes
             lp.screenOrientation = desired
             window.attributes = lp
+            if (window != null && window.decorView.parent != null) {
+                try {
+                    windowManager?.updateViewLayout(window.decorView, lp)
+                } catch (t: Throwable) {
+                    android.util.Log.e("DreamService", "Failed to updateViewLayout for orientation: ${t.message}")
+                }
+            }
         }
     }
 
@@ -123,6 +131,13 @@ class WirelessChargingDreamService : DreamService(),
             val lp = window.attributes
             lp.screenBrightness = 0.0f
             window.attributes = lp
+            if (window != null && window.decorView.parent != null) {
+                try {
+                    windowManager?.updateViewLayout(window.decorView, lp)
+                } catch (t: Throwable) {
+                    android.util.Log.e("DreamService", "Failed to updateViewLayout for brightness: ${t.message}")
+                }
+            }
         } else {
             // Device is propped up: restore brightness and display smart display
             android.util.Log.d("DreamService", "Propped up posture: restoring screen and widgets")
@@ -131,7 +146,31 @@ class WirelessChargingDreamService : DreamService(),
             val lp = window.attributes
             lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window.attributes = lp
+            if (window != null && window.decorView.parent != null) {
+                try {
+                    windowManager?.updateViewLayout(window.decorView, lp)
+                } catch (t: Throwable) {
+                    android.util.Log.e("DreamService", "Failed to updateViewLayout for brightness: ${t.message}")
+                }
+            }
         }
+    }
+
+    override fun onWindowAttributesChanged(attrs: WindowManager.LayoutParams?) {
+        super.onWindowAttributesChanged(attrs)
+        if (attrs != null && window != null && window.decorView.parent != null) {
+            try {
+                windowManager?.updateViewLayout(window.decorView, attrs)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        android.util.Log.d(
+            "DreamService",
+            "Configuration changed: orientation=${if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) "LANDSCAPE" else "PORTRAIT"}"
+        )
     }
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
@@ -255,8 +294,20 @@ class WirelessChargingDreamService : DreamService(),
             window.attributes = lp
         }
 
-        // Apply sensor / forced orientation mode
+        // Apply initial orientation synchronously to window attributes BEFORE inflating content
         val settings = preferencesManager.getSettings()
+        val initialOrientation = when (settings.orientationMode) {
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            else -> tiltSensorTracker?.getCurrentOrientation() ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        currentAppliedOrientation = initialOrientation
+        val initLp = window.attributes
+        initLp.screenOrientation = initialOrientation
+        window.attributes = initLp
+
+        // Start dynamic sensor orientation tracking if in sensor mode
         applyOrientation(settings.orientationMode)
 
         // Safe edge-to-edge system bar hiding via WindowCompat with transient swipe behavior
@@ -346,16 +397,9 @@ class WirelessChargingDreamService : DreamService(),
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
-        } else if (hasGainedWindowFocus) {
-            android.util.Log.i("DreamService", "Window focus lost while dreaming. Terminating dream to reveal alarm or foreground activity.")
-            try {
-                val dreamClass = DreamService::class.java
-                val previewField = dreamClass.getDeclaredField("mPreviewMode")
-                previewField.isAccessible = true
-                previewField.setBoolean(this, false)
-            } catch (_: Throwable) {}
-            wakeUp()
-            finish()
+        } else {
+            android.util.Log.d("DreamService", "Window focus lost. DreamService remains active unless morning alarm triggers.")
+            alarmTriggerTracker?.onWindowFocusLost()
         }
     }
 

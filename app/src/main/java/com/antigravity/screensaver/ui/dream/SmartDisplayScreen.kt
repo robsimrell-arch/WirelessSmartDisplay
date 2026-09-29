@@ -97,7 +97,7 @@ fun SmartDisplayScreen(
     val liveSettings by prefsManager.settingsFlow().collectAsState(initial = prefsManager.getSettings())
     val settings = customSettings ?: liveSettings
     val nightColor = settings.activeNightColor
-    var nightMode by remember { mutableStateOf(settings.nightModeEnabled) }
+    var nightMode by remember { mutableStateOf(false) }
     var nightBrightness by remember { mutableStateOf(settings.nightBrightness) }
     var showBrightnessIndicator by remember { mutableStateOf(false) }
 
@@ -138,6 +138,15 @@ fun SmartDisplayScreen(
         if (settings.muteLocationInNightMode) {
             if (nightMode) {
                 locationController.muteLocation()
+                // Periodic watchdog: enforce silence every 15s in case an external system service flips it on
+                while (true) {
+                    delay(15_000L)
+                    if (nightMode && settings.muteLocationInNightMode) {
+                        if (locationController.isLocationEnabled()) {
+                            locationController.enforceMute()
+                        }
+                    }
+                }
             } else {
                 locationController.restoreLocation()
             }
@@ -192,14 +201,12 @@ fun SmartDisplayScreen(
 
     val view = LocalView.current
     var lastHapticPercent by remember { mutableStateOf((nightBrightness * 100).roundToInt()) }
-    var zeroResistanceAccumulator by remember { mutableFloatStateOf(0f) }
 
     val brightnessGestureModifier = Modifier.pointerInput(nightMode, isFloodlightActive) {
         detectVerticalDragGestures(
             onDragStart = {
                 hideIndicatorJob?.cancel()
                 showBrightnessIndicator = true
-                zeroResistanceAccumulator = 0f
                 lastHapticPercent = if (isFloodlightActive) {
                     (floodlightBrightness * 100).roundToInt()
                 } else {
@@ -228,7 +235,7 @@ fun SmartDisplayScreen(
                     floodlightBrightness = (floodlightBrightness + delta).coerceIn(0.15f, 1.0f)
                 } else if (nightMode) {
                     // Fine-tuned progressive curve for Night Mode:
-                    // Low brightness (0% - 15%) is significantly less sensitive (~2200f divisor)
+                    // Low brightness (1% - 15%) is significantly less sensitive (~2200f divisor)
                     // so dialing 1%, 2%, 3% is steady and precise.
                     val divisor = if (nightBrightness <= 0.15f) {
                         2200f
@@ -239,28 +246,13 @@ fun SmartDisplayScreen(
                     val delta = -dragAmount / divisor
                     val candidate = nightBrightness + delta
 
-                    // 1% Snap Shelf & Floor:
-                    // When dragging down towards 0%, hold steadily on 1% (0.01f) until an extra deliberate drag is applied
-                    val newBrightness = if (candidate <= 0.012f && delta < 0) {
-                        zeroResistanceAccumulator += delta
-                        if (zeroResistanceAccumulator < -0.012f) {
-                            0.0f
-                        } else {
-                            0.01f
-                        }
-                    } else if (candidate <= 0.005f) {
-                        0.0f
-                    } else {
-                        zeroResistanceAccumulator = 0f
-                        candidate.coerceIn(0.01f, 1.0f)
-                    }
-
+                    val newBrightness = candidate.coerceIn(0.01f, 1.0f)
                     nightBrightness = newBrightness
 
-                    // Haptic click when hitting 1% or 0%
+                    // Haptic click when hitting 1% floor
                     val currentPercent = (nightBrightness * 100).roundToInt()
                     if (currentPercent != lastHapticPercent) {
-                        if (currentPercent == 1 || currentPercent == 0) {
+                        if (currentPercent == 1) {
                             try {
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             } catch (_: Exception) {}
@@ -270,7 +262,7 @@ fun SmartDisplayScreen(
                 } else {
                     // Daytime mode standard gesture
                     val delta = -dragAmount / 350f
-                    nightBrightness = (nightBrightness + delta).coerceIn(0.0f, 1.0f)
+                    nightBrightness = (nightBrightness + delta).coerceIn(0.01f, 1.0f)
                 }
                 showBrightnessIndicator = true
                 hideIndicatorJob?.cancel()
@@ -519,7 +511,7 @@ fun SmartDisplayScreen(
                     Surface(
                         onClick = {
                             if (!nightMode) nightMode = true
-                            nightBrightness = (nightBrightness - 0.05f).coerceIn(0.0f, 1.0f)
+                            nightBrightness = (nightBrightness - 0.05f).coerceIn(0.01f, 1.0f)
                             prefsManager.setNightBrightness(nightBrightness)
                             hideIndicatorJob?.cancel()
                             hideIndicatorJob = coroutineScope.launch {
@@ -557,7 +549,7 @@ fun SmartDisplayScreen(
                     Surface(
                         onClick = {
                             if (!nightMode) nightMode = true
-                            nightBrightness = (nightBrightness + 0.05f).coerceIn(0.0f, 1.0f)
+                            nightBrightness = (nightBrightness + 0.05f).coerceIn(0.01f, 1.0f)
                             prefsManager.setNightBrightness(nightBrightness)
                             hideIndicatorJob?.cancel()
                             hideIndicatorJob = coroutineScope.launch {

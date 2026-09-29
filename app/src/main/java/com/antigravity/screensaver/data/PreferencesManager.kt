@@ -26,7 +26,7 @@ class PreferencesManager(context: Context) {
             burnInProtection = prefs.getBoolean(KEY_BURN_IN_PROTECTION, true),
             nightModeEnabled = prefs.getBoolean(KEY_NIGHT_MODE, false),
             tapToToggleNight = prefs.getBoolean(KEY_TAP_TO_TOGGLE_NIGHT, true),
-            nightBrightness = prefs.getFloat(KEY_NIGHT_BRIGHTNESS, 0.20f).coerceIn(0.0f, 1.0f),
+            nightBrightness = prefs.getFloat(KEY_NIGHT_BRIGHTNESS, 0.20f).coerceIn(0.01f, 1.0f),
             nightColor = prefs.getString(KEY_NIGHT_COLOR, "red") ?: "red",
             showSeconds = prefs.getBoolean(KEY_SHOW_SECONDS, false),
             showBattery = prefs.getBoolean(KEY_SHOW_BATTERY, true),
@@ -76,7 +76,7 @@ class PreferencesManager(context: Context) {
             .putBoolean(KEY_BURN_IN_PROTECTION, settings.burnInProtection)
             .putBoolean(KEY_NIGHT_MODE, settings.nightModeEnabled)
             .putBoolean(KEY_TAP_TO_TOGGLE_NIGHT, settings.tapToToggleNight)
-            .putFloat(KEY_NIGHT_BRIGHTNESS, settings.nightBrightness.coerceIn(0.0f, 1.0f))
+            .putFloat(KEY_NIGHT_BRIGHTNESS, settings.nightBrightness.coerceIn(0.01f, 1.0f))
             .putString(KEY_NIGHT_COLOR, settings.nightColor)
             .putBoolean(KEY_SHOW_SECONDS, settings.showSeconds)
             .putBoolean(KEY_SHOW_BATTERY, settings.showBattery)
@@ -120,7 +120,7 @@ class PreferencesManager(context: Context) {
 
     fun setNightBrightness(brightness: Float) {
         prefs.edit()
-            .putFloat(KEY_NIGHT_BRIGHTNESS, brightness.coerceIn(0.0f, 1.0f))
+            .putFloat(KEY_NIGHT_BRIGHTNESS, brightness.coerceIn(0.01f, 1.0f))
             .apply()
     }
 

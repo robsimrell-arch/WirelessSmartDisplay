@@ -71,11 +71,16 @@ class ScreensaverActivity : ComponentActivity() {
 
         /**
          * Evaluates whether focus loss on ScreensaverActivity should yield and finish.
-         * Yields if an external activity (e.g. morning alarm, incoming call) took focus.
-         * Does NOT yield if the user intentionally launched a child activity (Settings/Clock/Home).
+         * Only yields if an alarm is active. Does NOT yield during child navigation
+         * (Settings/Clock/Home) or normal activity focus loss, ensuring ScreensaverActivity
+         * remains alive in the back stack.
          */
+        fun evaluateShouldYieldOnFocusLost(isAlarmActive: Boolean, isNavigatingToChild: Boolean = false): Boolean {
+            return isAlarmActive && !isNavigatingToChild
+        }
+
         fun evaluateShouldYieldOnFocusLost(isNavigatingToChild: Boolean): Boolean {
-            return !isNavigatingToChild
+            return evaluateShouldYieldOnFocusLost(isAlarmActive = false, isNavigatingToChild = isNavigatingToChild)
         }
 
         /**
@@ -100,7 +105,12 @@ class ScreensaverActivity : ComponentActivity() {
                 }
                 context.startActivity(intent)
                 if (ctx is DreamService) {
-                    ctx.wakeUp()
+                    try {
+                        val dreamClass = DreamService::class.java
+                        val previewField = dreamClass.getDeclaredField("mPreviewMode")
+                        previewField.isAccessible = true
+                        previewField.setBoolean(ctx, false)
+                    } catch (_: Throwable) {}
                     ctx.finish()
                 }
             }
@@ -226,13 +236,10 @@ class ScreensaverActivity : ComponentActivity() {
             hasGainedFocus = true
             isNavigatingToChild = false
             hideSystemBars()
-        } else if (hasGainedFocus && evaluateShouldYieldOnFocusLost(isNavigatingToChild)) {
-            // An external full-screen window (Google Clock AlarmActivity or incoming phone call)
-            // took window focus over ScreensaverActivity! Yield immediately so the alarm is visible.
-            android.util.Log.i("ScreensaverActivity", "External activity/alarm took window focus. Yielding to reveal alarm.")
-            finish()
         } else {
-            android.util.Log.d("ScreensaverActivity", "Focus lost to child activity (Settings/Clock/Home). Keeping screensaver alive in back stack.")
+            android.util.Log.d("ScreensaverActivity", "Window focus lost. ScreensaverActivity remains alive in back stack.")
+            // Only yield if AlarmTriggerTracker detects an active or scheduled morning alarm
+            alarmTriggerTracker?.onWindowFocusLost()
         }
     }
 
@@ -280,14 +287,12 @@ class ScreensaverActivity : ComponentActivity() {
     }
 
     /**
-     * Requests keyguard dismissal if locked, then launches target Clock app.
+     * Launches target Clock app directly without biometric bouncer.
      * Leaves ScreensaverActivity active in the task stack beneath the Clock app.
      */
     fun launchClockTarget() {
         isNavigatingToChild = true
-        dismissKeyguardAndRun {
-            performLaunchClock()
-        }
+        performLaunchClock()
     }
 
     private fun performLaunchClock() {
@@ -385,14 +390,12 @@ class ScreensaverActivity : ComponentActivity() {
     }
 
     /**
-     * Requests keyguard dismissal if locked, then launches Google Home or Amazon Alexa.
+     * Launches Google Home or Amazon Alexa directly without biometric bouncer.
      * Leaves ScreensaverActivity active in the task stack beneath the smart home app.
      */
     fun launchSmartHomeTarget(provider: String? = null) {
         isNavigatingToChild = true
-        dismissKeyguardAndRun {
-            performLaunchSmartHome(provider)
-        }
+        performLaunchSmartHome(provider)
     }
 
     private fun performLaunchSmartHome(provider: String?) {
@@ -486,30 +489,7 @@ class ScreensaverActivity : ComponentActivity() {
     }
 
     private fun dismissKeyguardAndRun(action: () -> Unit) {
-        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        if (keyguardManager != null && keyguardManager.isKeyguardLocked) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                keyguardManager.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() {
-                        action()
-                    }
-
-                    override fun onDismissCancelled() {
-                        isNavigatingToChild = false
-                        android.util.Log.d("ScreensaverActivity", "Keyguard dismissal cancelled")
-                    }
-
-                    override fun onDismissError() {
-                        isNavigatingToChild = false
-                        action()
-                    }
-                })
-            } else {
-                action()
-            }
-        } else {
-            action()
-        }
+        action()
     }
 
     private fun applyOrientation(mode: String) {
@@ -525,6 +505,12 @@ class ScreensaverActivity : ComponentActivity() {
             orientationJob = null
             requestedOrientation = forcedOrientation
             return
+        }
+
+        // Immediately set initial orientation synchronously to avoid portrait flash
+        val initialOrientation = tiltSensorTracker.getCurrentOrientation()
+        if (requestedOrientation != initialOrientation) {
+            requestedOrientation = initialOrientation
         }
 
         // "sensor" mode: dynamically track 3D orientation from gravity vector

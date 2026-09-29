@@ -2,6 +2,7 @@ package com.antigravity.screensaver
 
 import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.os.BatteryManager
 import android.provider.Settings
 import com.antigravity.screensaver.data.AlarmTriggerTracker
@@ -9,6 +10,7 @@ import com.antigravity.screensaver.data.AmbientLightTracker
 import com.antigravity.screensaver.data.BatteryStateTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.LocationController
+import com.antigravity.screensaver.data.TiltSensorTracker
 import com.antigravity.screensaver.model.DisplaySettings
 import com.antigravity.screensaver.model.ThermostatInfo
 import com.antigravity.screensaver.model.ThermostatMode
@@ -177,13 +179,15 @@ class ScreenSaverUnitTest {
 
     @Test
     fun testNightBrightnessRange() {
-        val minBrightness = 0.0f
+        val minBrightness = 0.01f
         val maxBrightness = 1.0f
-        val clampedLow = (-0.10f).coerceIn(0.0f, 1.0f)
-        val clampedHigh = (1.50f).coerceIn(0.0f, 1.0f)
-        val clampedValid = (0.0f).coerceIn(0.0f, 1.0f)
+        val clampedLow = (-0.10f).coerceIn(0.01f, 1.0f)
+        val clampedZero = (0.0f).coerceIn(0.01f, 1.0f)
+        val clampedHigh = (1.50f).coerceIn(0.01f, 1.0f)
+        val clampedValid = (0.01f).coerceIn(0.01f, 1.0f)
 
         assertEquals(minBrightness, clampedLow, 0.001f)
+        assertEquals(minBrightness, clampedZero, 0.001f)
         assertEquals(maxBrightness, clampedHigh, 0.001f)
         assertEquals(minBrightness, clampedValid, 0.001f)
     }
@@ -428,14 +432,103 @@ class ScreenSaverUnitTest {
         // ScreensaverActivity must NOT yield, so it remains in the back stack!
         assertFalse(
             "Must NOT yield when navigating to child activity",
-            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isNavigatingToChild = true)
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isAlarmActive = false, isNavigatingToChild = true)
         )
 
-        // When focus is lost externally (e.g. morning alarm from Google Clock or incoming call),
-        // ScreensaverActivity MUST yield immediately to reveal the alarm/call!
-        assertTrue(
-            "Must yield when an external alarm takes focus",
-            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isNavigatingToChild = false)
+        // When focus is lost normally without an alarm active, ScreensaverActivity must NOT yield!
+        assertFalse(
+            "Must NOT yield on normal focus loss without alarm active",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isAlarmActive = false, isNavigatingToChild = false)
         )
+
+        // When an active alarm takes focus, ScreensaverActivity MUST yield immediately to reveal the alarm!
+        assertTrue(
+            "Must yield when an active alarm takes focus",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isAlarmActive = true, isNavigatingToChild = false)
+        )
+
+        // User navigation takes precedence even if alarm active
+        assertFalse(
+            "Must NOT yield if user is actively navigating to child",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isAlarmActive = true, isNavigatingToChild = true)
+        )
+
+        // Single-argument backward compatibility overload
+        assertFalse(
+            "Single-arg must NOT yield when navigating to child",
+            ScreensaverActivity.evaluateShouldYieldOnFocusLost(isNavigatingToChild = true)
+        )
+    }
+
+    @Test
+    fun testTiltSensorScreenOrientationCalculation() {
+        // Flat surface: planar magnitude is tiny (< 0.8), preserves current orientation
+        val flatOrientation = TiltSensorTracker.calculateScreenOrientation(
+            x = 0.1f,
+            y = 0.1f,
+            z = 9.8f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, flatOrientation)
+
+        // Normal Portrait propped up on stand (y >> x, y > 0)
+        val portraitPropped = TiltSensorTracker.calculateScreenOrientation(
+            x = 0.0f,
+            y = 7.0f,
+            z = 6.0f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, portraitPropped)
+
+        // Landscape propped up on stand (x >> y, x > 0)
+        val landscapePropped = TiltSensorTracker.calculateScreenOrientation(
+            x = 7.0f,
+            y = 0.5f,
+            z = 6.0f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, landscapePropped)
+
+        // Reverse Landscape propped up on stand (x >> y, x < 0)
+        val reverseLandscapePropped = TiltSensorTracker.calculateScreenOrientation(
+            x = -7.0f,
+            y = 0.5f,
+            z = 6.0f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE, reverseLandscapePropped)
+
+        // Reverse Portrait propped up (y < 0, |y| >> |x|)
+        val reversePortraitPropped = TiltSensorTracker.calculateScreenOrientation(
+            x = 0.0f,
+            y = -7.0f,
+            z = 6.0f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT, reversePortraitPropped)
+
+        // Sensor Landscape hysteresis: when current is SENSOR_LANDSCAPE and phone is in landscape
+        val sensorLandscapeRetained = TiltSensorTracker.calculateScreenOrientation(
+            x = 6.5f,
+            y = 1.0f,
+            z = 5.0f,
+            currentOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        )
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, sensorLandscapeRetained)
+    }
+
+    @Test
+    fun testTiltSensorInclineCalculation() {
+        // Completely flat on table: z = 9.81, x=0, y=0 -> 0 degrees incline
+        val flatIncline = TiltSensorTracker.calculateInclineDegrees(0f, 0f, 9.81f)
+        assertEquals(0f, flatIncline, 0.5f)
+
+        // Completely vertical: z = 0, y = 9.81 -> 90 degrees incline
+        val verticalIncline = TiltSensorTracker.calculateInclineDegrees(0f, 9.81f, 0f)
+        assertEquals(90f, verticalIncline, 0.5f)
+
+        // Propped up at 45 degrees: z = 6.936f, y = 6.936f -> ~45 degrees incline
+        val proppedIncline = TiltSensorTracker.calculateInclineDegrees(0f, 6.936f, 6.936f)
+        assertEquals(45f, proppedIncline, 1.0f)
     }
 }

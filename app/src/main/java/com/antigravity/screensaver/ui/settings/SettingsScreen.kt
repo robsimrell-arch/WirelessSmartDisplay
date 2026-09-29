@@ -518,7 +518,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
 
                 SettingsToggleItem(
                     title = "Mute Location in Night Mode",
-                    summary = "Temporarily turns off Location during night mode to eliminate the flashing blue privacy indicator dot; restores location when waking up or room lights turn on.",
+                    summary = "Temporarily turns off Location & background Wi-Fi/Bluetooth scanning during night mode to eliminate the status bar privacy dot; restores automatically when waking up or room lights turn on.",
                     checked = settings.muteLocationInNightMode,
                     onCheckedChange = { update(settings.copy(muteLocationInNightMode = it)) }
                 )
@@ -585,7 +585,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Dims night clock elements down to complete black (0% to 100%). Can also swipe vertically on ambient display.",
+                            text = "Dims night clock elements (1% to 100%). Can also swipe vertically on ambient display.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondaryMuted
                         )
@@ -593,7 +593,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         Slider(
                             value = settings.nightBrightness,
                             onValueChange = { update(settings.copy(nightBrightness = it)) },
-                            valueRange = 0.0f..1.0f,
+                            valueRange = 0.01f..1.0f,
                             colors = SliderDefaults.colors(
                                 thumbColor = activeNightColor,
                                 activeTrackColor = activeNightColor,

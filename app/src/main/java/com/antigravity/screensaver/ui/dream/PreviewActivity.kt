@@ -62,7 +62,7 @@ class PreviewActivity : ComponentActivity() {
             "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            else -> tiltSensorTracker?.getCurrentOrientation() ?: ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         }
 
         // Keep screen on during preview
