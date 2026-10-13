@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesCondition" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <queries>
         <package android:name="com.google.android.apps.chromecast.app" />
@@ -118,6 +120,15 @@
         <!-- Trampoline to dismiss keyguard & launch Amazon Alexa from screensaver -->
         <activity
             android:name=".ui.dream.LaunchAlexaActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true" />
+
+        <!-- Trampoline to dismiss keyguard & launch Audio Output Switcher / Bluetooth from screensaver -->
+        <activity
+            android:name=".ui.dream.LaunchAudioOutputActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:showWhenLocked="true"

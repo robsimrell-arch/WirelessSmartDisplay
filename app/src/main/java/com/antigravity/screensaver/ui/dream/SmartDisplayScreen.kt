@@ -62,6 +62,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.antigravity.screensaver.audio.AudioDeviceTracker
+import com.antigravity.screensaver.audio.AudioOutputState
 import com.antigravity.screensaver.audio.BrownNoisePlayer
 import com.antigravity.screensaver.data.AmbientLightTracker
 import com.antigravity.screensaver.data.BatteryStateTracker
@@ -123,12 +125,15 @@ fun SmartDisplayScreen(
     val locationController = remember { LocationController.getInstance(context) }
     val brownNoisePlayer = remember { BrownNoisePlayer() }
     val isBrownNoisePlaying by brownNoisePlayer.isPlaying.collectAsState()
+    val audioDeviceTracker = remember { AudioDeviceTracker(context) }
+    val audioOutputState by audioDeviceTracker.outputState.collectAsState()
 
     DisposableEffect(Unit) {
         onDispose {
             dndController.reset()
             locationController.reset()
             brownNoisePlayer.release()
+            audioDeviceTracker.release()
             floodlightTimeoutJob?.cancel()
         }
     }
@@ -417,6 +422,8 @@ fun SmartDisplayScreen(
                                 weatherInfo = weatherInfo,
                                 isBrownNoisePlaying = isBrownNoisePlaying,
                                 onToggleBrownNoise = { brownNoisePlayer.toggle() },
+                                audioOutputState = audioOutputState,
+                                onOpenAudioOutput = { LaunchAudioOutputActivity.launch(context) },
                                 verticalSpacing = 6.dp,
                                 horizontalSpacing = 8.dp,
                                 modifier = Modifier.fillMaxWidth()
@@ -456,6 +463,8 @@ fun SmartDisplayScreen(
                                 weatherInfo = weatherInfo,
                                 isBrownNoisePlaying = isBrownNoisePlaying,
                                 onToggleBrownNoise = { brownNoisePlayer.toggle() },
+                                audioOutputState = audioOutputState,
+                                onOpenAudioOutput = { LaunchAudioOutputActivity.launch(context) },
                                 verticalSpacing = 8.dp,
                                 horizontalSpacing = 8.dp,
                                 modifier = Modifier.fillMaxWidth()
@@ -653,6 +662,8 @@ private fun TilesDashboardGrid(
     weatherInfo: WeatherInfo,
     isBrownNoisePlaying: Boolean,
     onToggleBrownNoise: () -> Unit,
+    audioOutputState: AudioOutputState,
+    onOpenAudioOutput: () -> Unit,
     modifier: Modifier = Modifier,
     verticalSpacing: Dp = 8.dp,
     horizontalSpacing: Dp = 8.dp
@@ -707,6 +718,8 @@ private fun TilesDashboardGrid(
                     BrownNoiseTile(
                         isPlaying = isBrownNoisePlaying,
                         onToggle = onToggleBrownNoise,
+                        audioOutputState = audioOutputState,
+                        onOpenAudioOutput = onOpenAudioOutput,
                         nightMode = false,
                         modifier = mod
                     )

@@ -40,7 +40,7 @@ Built with **Modern Android (Kotlin & Jetpack Compose)** with zero wake-lock bat
 * **Next Alarm**: Displays upcoming morning alarm with 1-tap dismiss.
 * **Weather Forecast**: Live temperature and condition updates via Open-Meteo.
 * **Thermostat & Climate Card**: Current & target temperatures with HVAC mode indicators.
-* **Brown Noise Generator**: Integrated sound machine playing continuous, soothing brown noise for sleep.
+* **Brown Noise Generator & Bluetooth Speaker Routing**: Integrated sound machine playing continuous, soothing brown noise for sleep, with quick-switching to external Bluetooth speakers and active device status display.
 * **Smart Home Shortcuts**: Quick launches for Google Home and Alexa.
 
 ---

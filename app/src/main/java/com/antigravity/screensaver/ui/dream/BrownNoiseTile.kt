@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.BluetoothConnected
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.antigravity.screensaver.audio.AudioOutputState
 import com.antigravity.screensaver.ui.theme.NightAmber
 import com.antigravity.screensaver.ui.theme.NightDimAmber
 import com.antigravity.screensaver.ui.theme.OledBlack
@@ -39,13 +42,15 @@ import com.antigravity.screensaver.ui.theme.TextPrimaryWhite
 import com.antigravity.screensaver.ui.theme.TextSecondaryMuted
 
 /**
- * Smart display widget tile for controlling soothing Brown Noise sleep audio.
- * Styled as a full-width card matching BatteryWidget, AlarmWidget, and GoogleHomeTile.
+ * Smart display widget tile for controlling soothing Brown Noise sleep audio
+ * with real-time Bluetooth speaker routing and status indicator.
  */
 @Composable
 fun BrownNoiseTile(
     isPlaying: Boolean,
     onToggle: () -> Unit,
+    audioOutputState: AudioOutputState = AudioOutputState(),
+    onOpenAudioOutput: () -> Unit = {},
     nightMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -115,17 +120,53 @@ fun BrownNoiseTile(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = textColor,
-                    softWrap = true
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = if (isPlaying) "Playing" else "Sleep Sound",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = secondaryColor,
-                    softWrap = true
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (audioOutputState.isBluetooth) {
+                        Icon(
+                            imageVector = Icons.Rounded.BluetoothConnected,
+                            contentDescription = "Bluetooth",
+                            tint = if (isPlaying) PixelAmber.copy(alpha = 0.9f) else PixelBlue,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                    }
+                    Text(
+                        text = if (isPlaying) "Playing • ${audioOutputState.deviceName}" else audioOutputState.deviceName,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = secondaryColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Bluetooth output selector button
             Surface(
+                onClick = onOpenAudioOutput,
+                shape = CircleShape,
+                color = if (audioOutputState.isBluetooth) Color(0x334285F4) else Color(0x22FFFFFF),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (audioOutputState.isBluetooth) Icons.Rounded.BluetoothConnected else Icons.Rounded.Bluetooth,
+                        contentDescription = "Select Bluetooth Speaker",
+                        tint = if (audioOutputState.isBluetooth) PixelBlue else TextPrimaryWhite.copy(alpha = 0.8f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Play / Stop button
+            Surface(
+                onClick = onToggle,
                 shape = CircleShape,
                 color = buttonBg,
                 modifier = Modifier.size(28.dp)
