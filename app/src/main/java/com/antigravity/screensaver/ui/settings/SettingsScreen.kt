@@ -36,7 +36,6 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Thermostat
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,6 +78,15 @@ import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.data.PreferencesManager
 import com.antigravity.screensaver.data.TiltSensorTracker
 import com.antigravity.screensaver.model.DisplaySettings
+import com.antigravity.screensaver.ui.theme.NightAmber
+import com.antigravity.screensaver.ui.theme.OledBlack
+import com.antigravity.screensaver.ui.theme.PixelAmber
+import com.antigravity.screensaver.ui.theme.PixelBlue
+import com.antigravity.screensaver.ui.theme.PixelGreen
+import com.antigravity.screensaver.ui.theme.SurfaceCard
+import com.antigravity.screensaver.ui.theme.SurfaceDark
+import com.antigravity.screensaver.ui.theme.TextPrimaryWhite
+import com.antigravity.screensaver.ui.theme.TextSecondaryMuted
 import com.antigravity.screensaver.model.NightColor
 import com.antigravity.screensaver.ui.dream.PreviewActivity
 import com.antigravity.screensaver.ui.theme.NightRed
@@ -907,8 +915,8 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
 
             SettingsToggleItem(
-                title = "Show Brown Noise Tile",
-                summary = "Display quick sleep sound tile to play soothing brown noise",
+                title = "Show Sleep Sounds Tile",
+                summary = "Display sleep sounds card (Brown, Pink, White, Rain, Waves, Fan & Timer)",
                 checked = settings.showBrownNoise,
                 onCheckedChange = { update(settings.copy(showBrownNoise = it)) }
             )

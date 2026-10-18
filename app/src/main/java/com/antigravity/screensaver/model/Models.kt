@@ -19,16 +19,27 @@ enum class NightColor(
     }
 }
 
-enum class ThermostatMode {
-    HEAT, COOL, ECO, OFF
+/**
+ * Procedurally synthesized sleep sounds (no bundled audio files, zero APK cost).
+ */
+enum class SleepSound(val id: String, val label: String) {
+    BROWN("brown", "Brown Noise"),
+    PINK("pink", "Pink Noise"),
+    WHITE("white", "White Noise"),
+    RAIN("rain", "Rain"),
+    OCEAN("ocean", "Ocean Waves"),
+    FAN("fan", "Fan");
+
+    companion object {
+        fun fromId(id: String?): SleepSound = entries.find { it.id.equals(id, ignoreCase = true) } ?: BROWN
+    }
 }
 
-data class ThermostatInfo(
-    val name: String = "Home Thermostat",
-    val currentTemp: Float = 71f,
-    val targetTemp: Float = 72f,
-    val mode: ThermostatMode = ThermostatMode.HEAT
-)
+/** Sleep timer choices in minutes. 0 = Off (play continuously). */
+val SLEEP_TIMER_OPTIONS_MINUTES = listOf(0, 30, 60, 90)
+
+fun sanitizeSleepTimerMinutes(minutes: Int): Int =
+    if (minutes in SLEEP_TIMER_OPTIONS_MINUTES) minutes else 0
 
 data class DisplaySettings(
     val wirelessOnly: Boolean = false,
@@ -43,16 +54,12 @@ data class DisplaySettings(
     val showAlarm: Boolean = true,
     val showWeather: Boolean = true,
     val showTomorrowWeather: Boolean = true,
-    val showThermostat: Boolean = true,
-    val thermostatName: String = "Home Thermostat",
-    val thermostatTargetTemp: Float = 72f,
-    val thermostatMode: String = "HEAT",
-    val showClimateCard: Boolean = true,
-    val climateZone1Name: String = "Downstairs",
-    val climateZone2Name: String = "Upstairs",
     val showGoogleHomePill: Boolean = true,
     val smartHomeProvider: String = "google",
+    /** Shows the Sleep Sounds tile (key name kept for backward compatibility). */
     val showBrownNoise: Boolean = true,
+    val sleepSound: String = "brown",
+    val sleepTimerMinutes: Int = 0,
     val customCity: String = "",
     val useFahrenheit: Boolean = false,
     val orientationMode: String = "sensor",
@@ -82,6 +89,9 @@ data class WeatherInfo(
     val conditionDescription: String = "Clear",
     val cityName: String = "Local",
     val isLoaded: Boolean = false,
+    val todayTempMax: Float = 0f,
+    val todayTempMin: Float = 0f,
+    val hasTodayHiLo: Boolean = false,
     val tomorrowWeatherCode: Int = 0,
     val tomorrowTempMax: Float = 0f,
     val tomorrowTempMin: Float = 0f,
@@ -93,6 +103,8 @@ data class WeatherInfo(
         if (isFahrenheit) return this
         return copy(
             temperature = temperature * 9f / 5f + 32f,
+            todayTempMax = todayTempMax * 9f / 5f + 32f,
+            todayTempMin = todayTempMin * 9f / 5f + 32f,
             tomorrowTempMax = tomorrowTempMax * 9f / 5f + 32f,
             tomorrowTempMin = tomorrowTempMin * 9f / 5f + 32f,
             isFahrenheit = true
@@ -103,6 +115,8 @@ data class WeatherInfo(
         if (!isFahrenheit) return this
         return copy(
             temperature = (temperature - 32f) * 5f / 9f,
+            todayTempMax = (todayTempMax - 32f) * 5f / 9f,
+            todayTempMin = (todayTempMin - 32f) * 5f / 9f,
             tomorrowTempMax = (tomorrowTempMax - 32f) * 5f / 9f,
             tomorrowTempMin = (tomorrowTempMin - 32f) * 5f / 9f,
             isFahrenheit = false
@@ -113,3 +127,4 @@ data class WeatherInfo(
         return if (useFahrenheit) toFahrenheit() else toCelsius()
     }
 }
+

@@ -11,9 +11,11 @@ import com.antigravity.screensaver.data.BatteryStateTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.data.TiltSensorTracker
+import com.antigravity.screensaver.audio.SleepSoundPlayer
+import com.antigravity.screensaver.audio.SoundGenerators
 import com.antigravity.screensaver.model.DisplaySettings
-import com.antigravity.screensaver.model.ThermostatInfo
-import com.antigravity.screensaver.model.ThermostatMode
+import com.antigravity.screensaver.model.SleepSound
+import com.antigravity.screensaver.model.sanitizeSleepTimerMinutes
 import com.antigravity.screensaver.ui.dream.ScreensaverActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -102,55 +104,73 @@ class ScreenSaverUnitTest {
     }
 
     @Test
-    fun testThermostatDefaults() {
+    fun testSleepSoundSettingsDefaultsAndCopy() {
         val settings = DisplaySettings()
-        assertTrue("Thermostat display should default to true", settings.showThermostat)
-        assertEquals("Home Thermostat", settings.thermostatName)
-        assertEquals(72f, settings.thermostatTargetTemp, 0.01f)
-        assertEquals("HEAT", settings.thermostatMode)
-    }
+        assertTrue("Sleep sound tile should default to true", settings.showBrownNoise)
+        assertEquals("brown", settings.sleepSound)
+        assertEquals(0, settings.sleepTimerMinutes)
 
-    @Test
-    fun testThermostatModes() {
-        assertEquals(ThermostatMode.HEAT, ThermostatMode.valueOf("HEAT"))
-        assertEquals(ThermostatMode.COOL, ThermostatMode.valueOf("COOL"))
-        assertEquals(ThermostatMode.ECO, ThermostatMode.valueOf("ECO"))
-        assertEquals(ThermostatMode.OFF, ThermostatMode.valueOf("OFF"))
-    }
-
-    @Test
-    fun testThermostatInfoModel() {
-        val info = ThermostatInfo(
-            name = "Living Room",
-            currentTemp = 70f,
-            targetTemp = 68f,
-            mode = ThermostatMode.COOL
+        val modified = settings.copy(
+            showBrownNoise = false,
+            sleepSound = "ocean",
+            sleepTimerMinutes = 60
         )
-        assertEquals("Living Room", info.name)
-        assertEquals(70f, info.currentTemp, 0.01f)
-        assertEquals(68f, info.targetTemp, 0.01f)
-        assertEquals(ThermostatMode.COOL, info.mode)
+        assertFalse(modified.showBrownNoise)
+        assertEquals("ocean", modified.sleepSound)
+        assertEquals(60, modified.sleepTimerMinutes)
     }
 
     @Test
-    fun testClimateControlsDefaults() {
-        val settings = DisplaySettings()
-        assertTrue("Climate card should default to true", settings.showClimateCard)
-        assertEquals("Downstairs", settings.climateZone1Name)
-        assertEquals("Upstairs", settings.climateZone2Name)
+    fun testSleepSoundEnum() {
+        assertEquals(6, SleepSound.entries.size)
+        assertEquals(SleepSound.BROWN, SleepSound.fromId("brown"))
+        assertEquals(SleepSound.PINK, SleepSound.fromId("pink"))
+        assertEquals(SleepSound.WHITE, SleepSound.fromId("white"))
+        assertEquals(SleepSound.RAIN, SleepSound.fromId("rain"))
+        assertEquals(SleepSound.OCEAN, SleepSound.fromId("ocean"))
+        assertEquals(SleepSound.FAN, SleepSound.fromId("fan"))
+        assertEquals(SleepSound.BROWN, SleepSound.fromId("unknown_fallback"))
     }
 
     @Test
-    fun testClimateControlsSettingsCopy() {
-        val original = DisplaySettings()
-        val modified = original.copy(
-            showClimateCard = false,
-            climateZone1Name = "Main Level",
-            climateZone2Name = "Master Bedroom"
-        )
-        assertFalse(modified.showClimateCard)
-        assertEquals("Main Level", modified.climateZone1Name)
-        assertEquals("Master Bedroom", modified.climateZone2Name)
+    fun testSanitizeSleepTimerMinutes() {
+        assertEquals(0, sanitizeSleepTimerMinutes(0))
+        assertEquals(30, sanitizeSleepTimerMinutes(30))
+        assertEquals(60, sanitizeSleepTimerMinutes(60))
+        assertEquals(90, sanitizeSleepTimerMinutes(90))
+        assertEquals(0, sanitizeSleepTimerMinutes(45))
+        assertEquals(0, sanitizeSleepTimerMinutes(-10))
+    }
+
+    @Test
+    fun testSleepSoundPlayerFadeGain() {
+        // Continuous / no timer -> full volume
+        assertEquals(1.0f, SleepSoundPlayer.computeTimerFadeGain(null), 0.001f)
+        // More than 60s left -> full volume
+        assertEquals(1.0f, SleepSoundPlayer.computeTimerFadeGain(120_000L), 0.001f)
+        assertEquals(1.0f, SleepSoundPlayer.computeTimerFadeGain(60_000L), 0.001f)
+        // Mid-fade (30s left out of 60s) -> 0.5
+        assertEquals(0.5f, SleepSoundPlayer.computeTimerFadeGain(30_000L), 0.001f)
+        // 15s left -> 0.25
+        assertEquals(0.25f, SleepSoundPlayer.computeTimerFadeGain(15_000L), 0.001f)
+        // 0s or negative -> 0.0 (silent)
+        assertEquals(0.0f, SleepSoundPlayer.computeTimerFadeGain(0L), 0.001f)
+        assertEquals(0.0f, SleepSoundPlayer.computeTimerFadeGain(-500L), 0.001f)
+    }
+
+    @Test
+    fun testProceduralSoundGenerators() {
+        SleepSound.entries.forEach { sound ->
+            val gen = SoundGenerators.create(sound)
+            // Generate 1000 samples and assert each is within stable audio range
+            for (i in 0 until 1000) {
+                val sample = gen.next()
+                assertTrue(
+                    "Sample for ${sound.name} out of bounds: $sample",
+                    sample in -2.0f..2.0f
+                )
+            }
+        }
     }
 
     @Test

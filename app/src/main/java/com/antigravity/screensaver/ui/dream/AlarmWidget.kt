@@ -4,7 +4,11 @@ import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,25 +35,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.antigravity.screensaver.ui.theme.AlarmAccent
+import com.antigravity.screensaver.ui.theme.AlarmBorderGlow
+import com.antigravity.screensaver.ui.theme.AlarmGlassBottom
+import com.antigravity.screensaver.ui.theme.AlarmGlassTop
+import com.antigravity.screensaver.ui.theme.AlarmSubtleText
 import com.antigravity.screensaver.ui.theme.NightAmber
 import com.antigravity.screensaver.ui.theme.NightDimAmber
-import com.antigravity.screensaver.ui.theme.PixelAmber
-import com.antigravity.screensaver.ui.theme.SurfaceCard
 import com.antigravity.screensaver.ui.theme.TextPrimaryWhite
-import com.antigravity.screensaver.ui.theme.TextSecondaryMuted
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlarmWidget(
     nightMode: Boolean,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -116,127 +126,152 @@ fun AlarmWidget(
         }
     }
 
-    val containerBg = if (nightMode) Color(0x22FFA726) else SurfaceCard
-    val primaryColor = if (nightMode) NightAmber else PixelAmber
-    val secondaryColor = if (nightMode) NightDimAmber else TextSecondaryMuted
+    val topBg = if (nightMode) Color(0x28FFA726) else AlarmGlassTop
+    val bottomBg = if (nightMode) Color(0x14FFA726) else AlarmGlassBottom
+    val borderColor = if (nightMode) NightAmber.copy(alpha = 0.45f) else AlarmBorderGlow
+    val primaryColor = if (nightMode) NightAmber else AlarmAccent
+    val secondaryColor = if (nightMode) NightDimAmber else AlarmSubtleText
     val textColor = if (nightMode) NightAmber else TextPrimaryWhite
+    val shape = RoundedCornerShape(18.dp)
 
-    Surface(
-        onClick = { openClockApp() },
-        shape = RoundedCornerShape(16.dp),
-        color = containerBg,
+    Box(
         modifier = modifier
+            .clip(shape)
+            .background(
+                brush = Brush.verticalGradient(listOf(topBg, bottomBg)),
+                shape = shape
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(listOf(borderColor, borderColor.copy(alpha = 0.25f))),
+                shape = shape
+            )
+            .combinedClickable(
+                onClick = { openClockApp() },
+                onLongClick = onLongClick
+            )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 9.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-        // Alarm icon in subtle rounded badge
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .background(
-                    if (nightMode) Color(0x33FFA726) else primaryColor.copy(alpha = 0.14f),
-                    RoundedCornerShape(9.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Alarm,
-                contentDescription = "Next Alarm",
-                tint = primaryColor,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = alarmTitle,
-                fontSize = 15.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = textColor,
-                softWrap = true
-            )
-            Text(
-                text = if (hasAlarm && !isDismissed) "Upcoming Alarm • $alarmCountdown" else alarmCountdown,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                color = secondaryColor,
-                softWrap = true
-            )
-        }
-
-        if (hasAlarm && canDismiss && !isDismissed) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                onClick = { dismissAlarm() },
-                shape = RoundedCornerShape(10.dp),
-                color = if (nightMode) NightAmber.copy(alpha = 0.25f) else PixelAmber.copy(alpha = 0.2f),
-                contentColor = primaryColor
+            // Alarm icon in vibrant rounded badge
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(
+                        if (nightMode) Color(0x33FFA726) else primaryColor.copy(alpha = 0.20f),
+                        RoundedCornerShape(10.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = primaryColor.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(10.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AlarmOff,
-                        contentDescription = "Dismiss",
-                        modifier = Modifier.size(14.dp),
-                        tint = primaryColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Dismiss",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryColor,
-                        softWrap = false
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Rounded.Alarm,
+                    contentDescription = "Next Alarm",
+                    tint = primaryColor,
+                    modifier = Modifier.size(20.dp)
+                )
             }
-        } else if (hasAlarm && isDismissed) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Dismissed",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Medium,
-                color = secondaryColor
-            )
-        } else if (!hasAlarm) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                onClick = { openClockApp() },
-                shape = RoundedCornerShape(10.dp),
-                color = if (nightMode) NightAmber.copy(alpha = 0.2f) else primaryColor.copy(alpha = 0.15f),
-                contentColor = primaryColor
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AlarmAdd,
-                        contentDescription = "Set Alarm",
-                        modifier = Modifier.size(14.dp),
-                        tint = primaryColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Set Alarm",
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = alarmTitle,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor,
+                    softWrap = true
+                )
+                Text(
+                    text = if (hasAlarm && !isDismissed) "Upcoming Alarm • $alarmCountdown" else alarmCountdown,
+                    style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryColor,
-                        softWrap = false
-                    )
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = secondaryColor,
+                    softWrap = true
+                )
+            }
+
+            if (hasAlarm && canDismiss && !isDismissed) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    onClick = { dismissAlarm() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (nightMode) NightAmber.copy(alpha = 0.25f) else primaryColor.copy(alpha = 0.24f),
+                    border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.5f)),
+                    contentColor = primaryColor
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AlarmOff,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(14.dp),
+                            tint = primaryColor
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Dismiss",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor,
+                            softWrap = false
+                        )
+                    }
+                }
+            } else if (hasAlarm && isDismissed) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Dismissed",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = secondaryColor
+                )
+            } else if (!hasAlarm) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    onClick = { openClockApp() },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (nightMode) NightAmber.copy(alpha = 0.2f) else primaryColor.copy(alpha = 0.20f),
+                    border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.45f)),
+                    contentColor = primaryColor
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AlarmAdd,
+                            contentDescription = "Set Alarm",
+                            modifier = Modifier.size(14.dp),
+                            tint = primaryColor
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Set Alarm",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryColor,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }
     }
 }
-}
+
 
 private fun formatAlarmDetails(triggerTime: Long): Pair<String, String> {
     val now = Calendar.getInstance()

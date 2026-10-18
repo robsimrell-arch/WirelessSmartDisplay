@@ -3,6 +3,8 @@ package com.antigravity.screensaver.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.antigravity.screensaver.model.DisplaySettings
+import com.antigravity.screensaver.model.SleepSound
+import com.antigravity.screensaver.model.sanitizeSleepTimerMinutes
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -17,6 +19,11 @@ class PreferencesManager(context: Context) {
                 .putBoolean(KEY_WIRELESS_ONLY, false)
                 .putBoolean(KEY_WIRELESS_ONLY_MIGRATED, true)
                 .apply()
+        }
+        if (LEGACY_REMOVED_KEYS.any { prefs.contains(it) }) {
+            val editor = prefs.edit()
+            LEGACY_REMOVED_KEYS.forEach { editor.remove(it) }
+            editor.apply()
         }
     }
 
@@ -34,16 +41,11 @@ class PreferencesManager(context: Context) {
             showAlarm = prefs.getBoolean(KEY_SHOW_ALARM, true),
             showWeather = prefs.getBoolean(KEY_SHOW_WEATHER, true),
             showTomorrowWeather = prefs.getBoolean(KEY_SHOW_TOMORROW_WEATHER, true),
-            showThermostat = prefs.getBoolean(KEY_SHOW_THERMOSTAT, true),
-            thermostatName = prefs.getString(KEY_THERMOSTAT_NAME, "Home Thermostat") ?: "Home Thermostat",
-            thermostatTargetTemp = prefs.getFloat(KEY_THERMOSTAT_TARGET_TEMP, 72f),
-            thermostatMode = prefs.getString(KEY_THERMOSTAT_MODE, "HEAT") ?: "HEAT",
-            showClimateCard = prefs.getBoolean(KEY_SHOW_CLIMATE_CARD, true),
-            climateZone1Name = prefs.getString(KEY_CLIMATE_ZONE1_NAME, "Downstairs") ?: "Downstairs",
-            climateZone2Name = prefs.getString(KEY_CLIMATE_ZONE2_NAME, "Upstairs") ?: "Upstairs",
             showGoogleHomePill = prefs.getBoolean(KEY_SHOW_GOOGLE_HOME_PILL, true),
             smartHomeProvider = prefs.getString(KEY_SMART_HOME_PROVIDER, "google") ?: "google",
             showBrownNoise = prefs.getBoolean(KEY_SHOW_BROWN_NOISE, true),
+            sleepSound = SleepSound.fromId(prefs.getString(KEY_SLEEP_SOUND, SleepSound.BROWN.id)).id,
+            sleepTimerMinutes = sanitizeSleepTimerMinutes(prefs.getInt(KEY_SLEEP_TIMER_MINUTES, 0)),
             customCity = prefs.getString(KEY_CUSTOM_CITY, "") ?: "",
             useFahrenheit = prefs.getBoolean(KEY_USE_FAHRENHEIT, false),
             orientationMode = prefs.getString(KEY_ORIENTATION_MODE, "sensor") ?: "sensor",
@@ -84,16 +86,11 @@ class PreferencesManager(context: Context) {
             .putBoolean(KEY_SHOW_ALARM, settings.showAlarm)
             .putBoolean(KEY_SHOW_WEATHER, settings.showWeather)
             .putBoolean(KEY_SHOW_TOMORROW_WEATHER, settings.showTomorrowWeather)
-            .putBoolean(KEY_SHOW_THERMOSTAT, settings.showThermostat)
-            .putString(KEY_THERMOSTAT_NAME, settings.thermostatName)
-            .putFloat(KEY_THERMOSTAT_TARGET_TEMP, settings.thermostatTargetTemp)
-            .putString(KEY_THERMOSTAT_MODE, settings.thermostatMode)
-            .putBoolean(KEY_SHOW_CLIMATE_CARD, settings.showClimateCard)
-            .putString(KEY_CLIMATE_ZONE1_NAME, settings.climateZone1Name)
-            .putString(KEY_CLIMATE_ZONE2_NAME, settings.climateZone2Name)
             .putBoolean(KEY_SHOW_GOOGLE_HOME_PILL, settings.showGoogleHomePill)
             .putString(KEY_SMART_HOME_PROVIDER, settings.smartHomeProvider)
             .putBoolean(KEY_SHOW_BROWN_NOISE, settings.showBrownNoise)
+            .putString(KEY_SLEEP_SOUND, SleepSound.fromId(settings.sleepSound).id)
+            .putInt(KEY_SLEEP_TIMER_MINUTES, sanitizeSleepTimerMinutes(settings.sleepTimerMinutes))
             .putString(KEY_CUSTOM_CITY, settings.customCity)
             .putBoolean(KEY_USE_FAHRENHEIT, settings.useFahrenheit)
             .putString(KEY_ORIENTATION_MODE, settings.orientationMode)
@@ -130,15 +127,15 @@ class PreferencesManager(context: Context) {
             .apply()
     }
 
-    fun setThermostatTargetTemp(temp: Float) {
+    fun setSleepSound(soundId: String) {
         prefs.edit()
-            .putFloat(KEY_THERMOSTAT_TARGET_TEMP, temp)
+            .putString(KEY_SLEEP_SOUND, SleepSound.fromId(soundId).id)
             .apply()
     }
 
-    fun setThermostatMode(mode: String) {
+    fun setSleepTimerMinutes(minutes: Int) {
         prefs.edit()
-            .putString(KEY_THERMOSTAT_MODE, mode)
+            .putInt(KEY_SLEEP_TIMER_MINUTES, sanitizeSleepTimerMinutes(minutes))
             .apply()
     }
 
@@ -176,16 +173,22 @@ class PreferencesManager(context: Context) {
         const val KEY_SHOW_ALARM = "pref_show_alarm"
         const val KEY_SHOW_WEATHER = "pref_show_weather"
         const val KEY_SHOW_TOMORROW_WEATHER = "pref_show_tomorrow_weather"
-        const val KEY_SHOW_THERMOSTAT = "pref_show_thermostat"
-        const val KEY_THERMOSTAT_NAME = "pref_thermostat_name"
-        const val KEY_THERMOSTAT_TARGET_TEMP = "pref_thermostat_target_temp"
-        const val KEY_THERMOSTAT_MODE = "pref_thermostat_mode"
-        const val KEY_SHOW_CLIMATE_CARD = "pref_show_climate_card"
-        const val KEY_CLIMATE_ZONE1_NAME = "pref_climate_zone1_name"
-        const val KEY_CLIMATE_ZONE2_NAME = "pref_climate_zone2_name"
         const val KEY_SHOW_GOOGLE_HOME_PILL = "pref_show_google_home_pill"
         const val KEY_SMART_HOME_PROVIDER = "pref_smart_home_provider"
         const val KEY_SHOW_BROWN_NOISE = "pref_show_brown_noise"
+        const val KEY_SLEEP_SOUND = "pref_sleep_sound"
+        const val KEY_SLEEP_TIMER_MINUTES = "pref_sleep_timer_minutes"
+
+        /** Keys from the removed thermostat/climate feature, purged once on startup. */
+        private val LEGACY_REMOVED_KEYS = listOf(
+            "pref_show_thermostat",
+            "pref_thermostat_name",
+            "pref_thermostat_target_temp",
+            "pref_thermostat_mode",
+            "pref_show_climate_card",
+            "pref_climate_zone1_name",
+            "pref_climate_zone2_name"
+        )
         const val KEY_CUSTOM_CITY = "pref_custom_city"
         const val KEY_USE_FAHRENHEIT = "pref_use_fahrenheit"
         const val KEY_ORIENTATION_MODE = "pref_orientation_mode"

@@ -62,9 +62,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.os.SystemClock
+import androidx.compose.runtime.mutableLongStateOf
 import com.antigravity.screensaver.audio.AudioDeviceTracker
 import com.antigravity.screensaver.audio.AudioOutputState
-import com.antigravity.screensaver.audio.BrownNoisePlayer
+import com.antigravity.screensaver.audio.SleepSoundPlayer
 import com.antigravity.screensaver.data.AmbientLightTracker
 import com.antigravity.screensaver.data.BatteryStateTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
@@ -73,8 +75,7 @@ import com.antigravity.screensaver.data.PreferencesManager
 import com.antigravity.screensaver.data.WeatherRepository
 import com.antigravity.screensaver.model.BatteryInfo
 import com.antigravity.screensaver.model.DisplaySettings
-import com.antigravity.screensaver.model.ThermostatInfo
-import com.antigravity.screensaver.model.ThermostatMode
+import com.antigravity.screensaver.model.SleepSound
 import com.antigravity.screensaver.model.WeatherInfo
 import com.antigravity.screensaver.ui.theme.NightAmber
 import com.antigravity.screensaver.ui.theme.NightDimRed
@@ -94,7 +95,7 @@ fun SmartDisplayScreen(
     val context = LocalContext.current
     val prefsManager = remember { PreferencesManager(context) }
     val batteryTracker = remember { BatteryStateTracker(context) }
-    val weatherRepo = remember { WeatherRepository() }
+    val weatherRepo = remember { WeatherRepository(context) }
 
     val liveSettings by prefsManager.settingsFlow().collectAsState(initial = prefsManager.getSettings())
     val settings = customSettings ?: liveSettings
@@ -123,8 +124,43 @@ fun SmartDisplayScreen(
     val lightTracker = remember { AmbientLightTracker(context) }
     val dndController = remember { DoNotDisturbController.getInstance(context) }
     val locationController = remember { LocationController.getInstance(context) }
-    val brownNoisePlayer = remember { BrownNoisePlayer() }
-    val isBrownNoisePlaying by brownNoisePlayer.isPlaying.collectAsState()
+    val sleepSoundPlayer = remember { SleepSoundPlayer() }
+    val isSleepSoundPlaying by sleepSoundPlayer.isPlaying.collectAsState()
+    val currentSleepSound by sleepSoundPlayer.currentSound.collectAsState()
+    val currentSleepTimerMinutes by sleepSoundPlayer.timerMinutes.collectAsState()
+    val timerEndsAtElapsedMs by sleepSoundPlayer.timerEndsAtElapsedMs.collectAsState()
+    var showSleepSoundPicker by remember { mutableStateOf(false) }
+    var activeTileSheet by remember { mutableStateOf(ActiveTileSheet.NONE) }
+    val view = LocalView.current
+
+    fun triggerLongPressSheet(sheet: ActiveTileSheet) {
+        try {
+            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        } catch (_: Exception) {}
+        showSleepSoundPicker = false
+        activeTileSheet = sheet
+    }
+
+    LaunchedEffect(settings.sleepSound, settings.sleepTimerMinutes) {
+        sleepSoundPlayer.restore(
+            SleepSound.fromId(settings.sleepSound),
+            settings.sleepTimerMinutes
+        )
+    }
+
+    var currentElapsedRealtime by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(isSleepSoundPlaying, timerEndsAtElapsedMs) {
+        if (isSleepSoundPlaying && timerEndsAtElapsedMs != null) {
+            while (true) {
+                currentElapsedRealtime = SystemClock.elapsedRealtime()
+                delay(1000L)
+            }
+        }
+    }
+    val remainingTimerMs = if (isSleepSoundPlaying && timerEndsAtElapsedMs != null) {
+        (timerEndsAtElapsedMs!! - currentElapsedRealtime).coerceAtLeast(0L)
+    } else null
+
     val audioDeviceTracker = remember { AudioDeviceTracker(context) }
     val audioOutputState by audioDeviceTracker.outputState.collectAsState()
 
@@ -132,7 +168,7 @@ fun SmartDisplayScreen(
         onDispose {
             dndController.reset()
             locationController.reset()
-            brownNoisePlayer.release()
+            sleepSoundPlayer.release()
             audioDeviceTracker.release()
             floodlightTimeoutJob?.cancel()
         }
@@ -193,10 +229,13 @@ fun SmartDisplayScreen(
         initial = batteryTracker.getCurrentBatteryInfo()
     )
 
-    var weatherInfo by remember { mutableStateOf(WeatherInfo()) }
+    var weatherInfo by remember {
+        mutableStateOf(weatherRepo.getInitialWeather(settings.customCity, settings.useFahrenheit))
+    }
 
     LaunchedEffect(settings.showWeather, settings.customCity, settings.useFahrenheit) {
         if (settings.showWeather) {
+            weatherInfo = weatherRepo.getInitialWeather(settings.customCity, settings.useFahrenheit)
             weatherInfo = weatherRepo.getWeather(settings.customCity, settings.useFahrenheit)
         }
     }
@@ -204,7 +243,6 @@ fun SmartDisplayScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val view = LocalView.current
     var lastHapticPercent by remember { mutableStateOf((nightBrightness * 100).roundToInt()) }
 
     val brightnessGestureModifier = Modifier.pointerInput(nightMode, isFloodlightActive) {
@@ -293,7 +331,7 @@ fun SmartDisplayScreen(
                     floodlightTimeoutJob?.cancel()
                     showBrightnessIndicator = false
                 } else {
-                    brownNoisePlayer.stop()
+                    sleepSoundPlayer.stop()
                     onExitScreensaver()
                 }
             },
@@ -322,8 +360,8 @@ fun SmartDisplayScreen(
             .then(tapGestureModifier)
             .safeDrawingPadding()
             .padding(
-                horizontal = if (nightMode) 16.dp else 24.dp,
-                vertical = if (isLandscape) 12.dp else 24.dp
+                horizontal = if (nightMode) 16.dp else 20.dp,
+                vertical = if (isLandscape) 12.dp else 20.dp
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -389,6 +427,16 @@ fun SmartDisplayScreen(
                 }
             } else {
                 // FULL COLOR MODE (2-column non-scrolling grid layout)
+                val onClockTap: () -> Unit = {
+                    if (settings.nightModeEnabled && settings.tapToToggleNight) {
+                        nightMode = !nightMode
+                        showBrightnessIndicator = false
+                    }
+                }
+                val onClockLongPress: () -> Unit = {
+                    triggerLongPressSheet(ActiveTileSheet.CLOCK_AND_TILES)
+                }
+
                 if (isLandscape) {
                     Row(
                         modifier = Modifier.fillMaxSize(),
@@ -404,7 +452,9 @@ fun SmartDisplayScreen(
                         ) {
                             ClockWidget(
                                 showSeconds = settings.showSeconds,
-                                nightMode = false
+                                nightMode = false,
+                                onTap = onClockTap,
+                                onLongClick = onClockLongPress
                             )
                         }
 
@@ -420,10 +470,20 @@ fun SmartDisplayScreen(
                                 settings = settings,
                                 batteryInfo = batteryInfo,
                                 weatherInfo = weatherInfo,
-                                isBrownNoisePlaying = isBrownNoisePlaying,
-                                onToggleBrownNoise = { brownNoisePlayer.toggle() },
+                                sleepSound = currentSleepSound,
+                                isSleepSoundPlaying = isSleepSoundPlaying,
+                                onToggleSleepSound = { sleepSoundPlayer.toggle() },
+                                onOpenSleepSoundPicker = {
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } catch (_: Exception) {}
+                                    activeTileSheet = ActiveTileSheet.NONE
+                                    showSleepSoundPicker = true
+                                },
+                                onOpenTileSheet = { sheet -> triggerLongPressSheet(sheet) },
+                                sleepTimerMinutes = currentSleepTimerMinutes,
+                                remainingTimerMs = remainingTimerMs,
                                 audioOutputState = audioOutputState,
-                                onOpenAudioOutput = { LaunchAudioOutputActivity.launch(context) },
                                 verticalSpacing = 6.dp,
                                 horizontalSpacing = 8.dp,
                                 modifier = Modifier.fillMaxWidth()
@@ -439,32 +499,44 @@ fun SmartDisplayScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(0.35f),
+                                .weight(0.34f),
                             contentAlignment = Alignment.Center
                         ) {
                             ClockWidget(
                                 showSeconds = settings.showSeconds,
                                 nightMode = false,
+                                onTap = onClockTap,
+                                onLongClick = onClockLongPress,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(0.65f),
+                                .weight(0.66f),
                             contentAlignment = Alignment.Center
                         ) {
                             TilesDashboardGrid(
                                 settings = settings,
                                 batteryInfo = batteryInfo,
                                 weatherInfo = weatherInfo,
-                                isBrownNoisePlaying = isBrownNoisePlaying,
-                                onToggleBrownNoise = { brownNoisePlayer.toggle() },
+                                sleepSound = currentSleepSound,
+                                isSleepSoundPlaying = isSleepSoundPlaying,
+                                onToggleSleepSound = { sleepSoundPlayer.toggle() },
+                                onOpenSleepSoundPicker = {
+                                    try {
+                                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                    } catch (_: Exception) {}
+                                    activeTileSheet = ActiveTileSheet.NONE
+                                    showSleepSoundPicker = true
+                                },
+                                onOpenTileSheet = { sheet -> triggerLongPressSheet(sheet) },
+                                sleepTimerMinutes = currentSleepTimerMinutes,
+                                remainingTimerMs = remainingTimerMs,
                                 audioOutputState = audioOutputState,
-                                onOpenAudioOutput = { LaunchAudioOutputActivity.launch(context) },
                                 verticalSpacing = 8.dp,
                                 horizontalSpacing = 8.dp,
                                 modifier = Modifier.fillMaxWidth()
@@ -652,6 +724,45 @@ fun SmartDisplayScreen(
                 }
             }
         }
+
+        // Sleep Sound & Timer Picker Bottom Sheet / Overlay
+        SleepSoundPickerSheet(
+            visible = showSleepSoundPicker,
+            currentSound = currentSleepSound,
+            onSelectSound = { sound ->
+                sleepSoundPlayer.setSound(sound)
+                prefsManager.setSleepSound(sound.id)
+            },
+            currentTimerMinutes = currentSleepTimerMinutes,
+            onSelectTimerMinutes = { mins ->
+                sleepSoundPlayer.setTimerMinutes(mins)
+                prefsManager.setSleepTimerMinutes(mins)
+            },
+            audioOutputState = audioOutputState,
+            onOpenAudioOutput = {
+                LaunchAudioOutputActivity.launch(context)
+            },
+            onHideTile = {
+                prefsManager.updateSettings(settings.copy(showBrownNoise = false))
+            },
+            onDismiss = { showSleepSoundPicker = false },
+            nightMode = nightMode
+        )
+
+        // Contextual Long-Press Bottom Sheet for Weather, Battery, Smart Home, Alarm, and Clock/Tiles
+        TileSettingsBottomSheet(
+            activeSheet = activeTileSheet,
+            settings = settings,
+            onUpdateSettings = { updated ->
+                prefsManager.updateSettings(updated)
+            },
+            onDismiss = { activeTileSheet = ActiveTileSheet.NONE },
+            onOpenFullSettings = {
+                try {
+                    ScreensaverActivity.launch(context, ScreensaverActivity.TARGET_SETTINGS)
+                } catch (_: Exception) {}
+            }
+        )
     }
 }
 
@@ -660,10 +771,14 @@ private fun TilesDashboardGrid(
     settings: DisplaySettings,
     batteryInfo: BatteryInfo,
     weatherInfo: WeatherInfo,
-    isBrownNoisePlaying: Boolean,
-    onToggleBrownNoise: () -> Unit,
+    sleepSound: SleepSound,
+    isSleepSoundPlaying: Boolean,
+    onToggleSleepSound: () -> Unit,
+    onOpenSleepSoundPicker: () -> Unit,
+    onOpenTileSheet: (ActiveTileSheet) -> Unit,
+    sleepTimerMinutes: Int,
+    remainingTimerMs: Long?,
     audioOutputState: AudioOutputState,
-    onOpenAudioOutput: () -> Unit,
     modifier: Modifier = Modifier,
     verticalSpacing: Dp = 8.dp,
     horizontalSpacing: Dp = 8.dp
@@ -677,11 +792,14 @@ private fun TilesDashboardGrid(
         if (settings.showAlarm) {
             AlarmWidget(
                 nightMode = false,
+                onLongClick = { onOpenTileSheet(ActiveTileSheet.ALARM) },
                 modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // 2x2 Grid for Remaining Utility Tiles (Weather, Battery, Google Home, Brown Noise)
+        // 2x2 Grid for Remaining Utility Tiles:
+        // Row 1: Weather + Sleep Sounds (stacked card with sound, timer & speaker)
+        // Row 2: Battery + Smart Home
         val utilityTiles = buildList<@Composable (Modifier) -> Unit> {
             if (settings.showWeather) {
                 add { mod ->
@@ -690,6 +808,22 @@ private fun TilesDashboardGrid(
                         useFahrenheit = settings.useFahrenheit,
                         nightMode = false,
                         showTomorrow = settings.showTomorrowWeather,
+                        onLongClick = { onOpenTileSheet(ActiveTileSheet.WEATHER) },
+                        modifier = mod
+                    )
+                }
+            }
+            if (settings.showBrownNoise) {
+                add { mod ->
+                    SleepSoundTile(
+                        sound = sleepSound,
+                        isPlaying = isSleepSoundPlaying,
+                        onToggle = onToggleSleepSound,
+                        onLongClick = onOpenSleepSoundPicker,
+                        timerMinutes = sleepTimerMinutes,
+                        remainingTimerMs = remainingTimerMs,
+                        audioOutputState = audioOutputState,
+                        nightMode = false,
                         modifier = mod
                     )
                 }
@@ -700,6 +834,7 @@ private fun TilesDashboardGrid(
                         batteryInfo = batteryInfo,
                         nightMode = false,
                         showWatts = settings.showChargingWatts,
+                        onLongClick = { onOpenTileSheet(ActiveTileSheet.BATTERY) },
                         modifier = mod
                     )
                 }
@@ -709,18 +844,7 @@ private fun TilesDashboardGrid(
                     SmartHomeTile(
                         provider = settings.smartHomeProvider,
                         nightMode = false,
-                        modifier = mod
-                    )
-                }
-            }
-            if (settings.showBrownNoise) {
-                add { mod ->
-                    BrownNoiseTile(
-                        isPlaying = isBrownNoisePlaying,
-                        onToggle = onToggleBrownNoise,
-                        audioOutputState = audioOutputState,
-                        onOpenAudioOutput = onOpenAudioOutput,
-                        nightMode = false,
+                        onLongClick = { onOpenTileSheet(ActiveTileSheet.SMART_HOME) },
                         modifier = mod
                     )
                 }
@@ -751,3 +875,4 @@ private fun TilesDashboardGrid(
         }
     }
 }
+

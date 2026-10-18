@@ -35,12 +35,19 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ClockWidget(
     showSeconds: Boolean,
     nightMode: Boolean,
     nightColor: NightColor = NightColor.RED,
     isLandscape: Boolean = false,
+    onTap: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -150,8 +157,21 @@ fun ClockWidget(
     val secondaryColor = TextSecondaryMuted
     val accentColor = PixelBlue
 
+    val interactiveModifier = if (onLongClick != null || onTap != null) {
+        Modifier.combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = { onTap?.invoke() },
+            onLongClick = { onLongClick?.invoke() }
+        )
+    } else {
+        Modifier
+    }
+
     Column(
-        modifier = modifier.padding(start = 12.dp),
+        modifier = modifier
+            .then(interactiveModifier)
+            .padding(start = 12.dp),
         verticalArrangement = Arrangement.Center
     ) {
         if (showSeconds) {
