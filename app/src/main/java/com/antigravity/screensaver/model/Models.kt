@@ -56,6 +56,10 @@ data class DisplaySettings(
     val showTomorrowWeather: Boolean = true,
     val showGoogleHomePill: Boolean = true,
     val smartHomeProvider: String = "google",
+    val showSmartHomeAutomation: Boolean = true,
+    val smartHomeAutomationLabel: String = "Lights Out",
+    val smartHomeAutomationIntentUri: String = "",
+    val smartHomeAutomationWidgetId: Int = -1,
     /** Shows the Sleep Sounds tile (key name kept for backward compatibility). */
     val showBrownNoise: Boolean = true,
     val sleepSound: String = "brown",

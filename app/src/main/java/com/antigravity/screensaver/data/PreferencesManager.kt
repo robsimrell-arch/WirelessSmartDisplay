@@ -43,6 +43,10 @@ class PreferencesManager(context: Context) {
             showTomorrowWeather = prefs.getBoolean(KEY_SHOW_TOMORROW_WEATHER, true),
             showGoogleHomePill = prefs.getBoolean(KEY_SHOW_GOOGLE_HOME_PILL, true),
             smartHomeProvider = prefs.getString(KEY_SMART_HOME_PROVIDER, "google") ?: "google",
+            showSmartHomeAutomation = prefs.getBoolean(KEY_SHOW_SMART_HOME_AUTOMATION, true),
+            smartHomeAutomationLabel = prefs.getString(KEY_SMART_HOME_AUTOMATION_LABEL, "Lights Out") ?: "Lights Out",
+            smartHomeAutomationIntentUri = prefs.getString(KEY_SMART_HOME_AUTOMATION_INTENT_URI, "") ?: "",
+            smartHomeAutomationWidgetId = prefs.getInt(KEY_SMART_HOME_AUTOMATION_WIDGET_ID, -1),
             showBrownNoise = prefs.getBoolean(KEY_SHOW_BROWN_NOISE, true),
             sleepSound = SleepSound.fromId(prefs.getString(KEY_SLEEP_SOUND, SleepSound.BROWN.id)).id,
             sleepTimerMinutes = sanitizeSleepTimerMinutes(prefs.getInt(KEY_SLEEP_TIMER_MINUTES, 0)),
@@ -88,6 +92,10 @@ class PreferencesManager(context: Context) {
             .putBoolean(KEY_SHOW_TOMORROW_WEATHER, settings.showTomorrowWeather)
             .putBoolean(KEY_SHOW_GOOGLE_HOME_PILL, settings.showGoogleHomePill)
             .putString(KEY_SMART_HOME_PROVIDER, settings.smartHomeProvider)
+            .putBoolean(KEY_SHOW_SMART_HOME_AUTOMATION, settings.showSmartHomeAutomation)
+            .putString(KEY_SMART_HOME_AUTOMATION_LABEL, settings.smartHomeAutomationLabel)
+            .putString(KEY_SMART_HOME_AUTOMATION_INTENT_URI, settings.smartHomeAutomationIntentUri)
+            .putInt(KEY_SMART_HOME_AUTOMATION_WIDGET_ID, settings.smartHomeAutomationWidgetId)
             .putBoolean(KEY_SHOW_BROWN_NOISE, settings.showBrownNoise)
             .putString(KEY_SLEEP_SOUND, SleepSound.fromId(settings.sleepSound).id)
             .putInt(KEY_SLEEP_TIMER_MINUTES, sanitizeSleepTimerMinutes(settings.sleepTimerMinutes))
@@ -158,6 +166,10 @@ class PreferencesManager(context: Context) {
         return newMode
     }
 
+    fun setSmartHomeAutomationWidgetId(widgetId: Int) {
+        prefs.edit().putInt(KEY_SMART_HOME_AUTOMATION_WIDGET_ID, widgetId).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "screen_saver_prefs"
         private const val KEY_WIRELESS_ONLY_MIGRATED = "pref_wireless_only_migrated_v2"
@@ -175,6 +187,10 @@ class PreferencesManager(context: Context) {
         const val KEY_SHOW_TOMORROW_WEATHER = "pref_show_tomorrow_weather"
         const val KEY_SHOW_GOOGLE_HOME_PILL = "pref_show_google_home_pill"
         const val KEY_SMART_HOME_PROVIDER = "pref_smart_home_provider"
+        const val KEY_SHOW_SMART_HOME_AUTOMATION = "pref_show_smart_home_automation"
+        const val KEY_SMART_HOME_AUTOMATION_LABEL = "pref_smart_home_automation_label"
+        const val KEY_SMART_HOME_AUTOMATION_INTENT_URI = "pref_smart_home_automation_intent_uri"
+        const val KEY_SMART_HOME_AUTOMATION_WIDGET_ID = "pref_smart_home_automation_widget_id"
         const val KEY_SHOW_BROWN_NOISE = "pref_show_brown_noise"
         const val KEY_SLEEP_SOUND = "pref_sleep_sound"
         const val KEY_SLEEP_TIMER_MINUTES = "pref_sleep_timer_minutes"

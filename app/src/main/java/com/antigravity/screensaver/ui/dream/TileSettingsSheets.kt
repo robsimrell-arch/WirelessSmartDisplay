@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -538,6 +539,88 @@ private fun SmartHomeQuickSheetContent(
     Spacer(modifier = Modifier.height(14.dp))
 
     val isAlexa = settings.smartHomeProvider.equals("alexa", ignoreCase = true)
+    val accent = if (isAlexa) AlexaCyan else SmartHomeGoogleAccent
+    var automationLabelInput by remember(settings.smartHomeAutomationLabel) {
+        mutableStateOf(settings.smartHomeAutomationLabel)
+    }
+
+    QuickToggleRow(
+        title = "Show Automation Button",
+        subtitle = "Display quick-trigger automation pill (e.g. Lights Out) at the bottom of the tile",
+        checked = settings.showSmartHomeAutomation,
+        accentColor = accent,
+        onCheckedChange = { onUpdateSettings(settings.copy(showSmartHomeAutomation = it)) }
+    )
+
+    if (settings.showSmartHomeAutomation) {
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedTextField(
+            value = automationLabelInput,
+            onValueChange = {
+                automationLabelInput = it
+                onUpdateSettings(settings.copy(smartHomeAutomationLabel = it))
+            },
+            label = { Text("Automation Button Label") },
+            placeholder = { Text("Lights Out", color = TextSecondaryMuted) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextPrimaryWhite,
+                unfocusedTextColor = TextPrimaryWhite,
+                focusedBorderColor = accent,
+                unfocusedBorderColor = Color(0x44FFFFFF)
+            )
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        val displayLabel = settings.smartHomeAutomationLabel.trim().ifEmpty { "Lights Out" }
+        Surface(
+            onClick = {
+                onDismiss()
+                triggerSmartHomeAutomation(context, settings.smartHomeProvider)
+            },
+            shape = RoundedCornerShape(14.dp),
+            color = accent.copy(alpha = 0.20f),
+            border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.PowerSettingsNew,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Run \"$displayLabel\" Automation",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
     Surface(
         onClick = {
             onDismiss()

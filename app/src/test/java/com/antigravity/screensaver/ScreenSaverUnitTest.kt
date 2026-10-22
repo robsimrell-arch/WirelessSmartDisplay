@@ -214,17 +214,41 @@ class ScreenSaverUnitTest {
 
     @Test
     fun testAmbientLightHysteresis() {
-        // Below DARK_THRESHOLD_LUX (5.0f) should become dark
+        // Below DARK_THRESHOLD_LUX (5.0f) should trigger dark mode
         assertTrue("3 lux should trigger dark mode", AmbientLightTracker.evaluateDarkState(currentDark = false, lux = 3.0f))
         assertTrue("5 lux should trigger dark mode", AmbientLightTracker.evaluateDarkState(currentDark = false, lux = 5.0f))
 
-        // Above BRIGHT_THRESHOLD_LUX (12.0f) should become bright
-        assertFalse("15 lux should trigger bright mode", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 15.0f))
-        assertFalse("12 lux should trigger bright mode", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 12.0f))
+        // Above BRIGHT_THRESHOLD_LUX (35.0f) should trigger bright mode
+        assertFalse("40 lux should trigger bright mode", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 40.0f))
+        assertFalse("35 lux should trigger bright mode", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 35.0f))
 
-        // Between 5.0f and 12.0f (e.g. 8.0f), previous state must be preserved (hysteresis)
+        // Between 5.0f and 35.0f (e.g. 8.0f, 15.0f, 25.0f), previous state must be preserved (hysteresis)
         assertTrue("8 lux should keep dark if already dark", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 8.0f))
+        assertTrue("20 lux should keep dark if already dark", AmbientLightTracker.evaluateDarkState(currentDark = true, lux = 20.0f))
         assertFalse("8 lux should keep bright if already bright", AmbientLightTracker.evaluateDarkState(currentDark = false, lux = 8.0f))
+        assertFalse("20 lux should keep bright if already bright", AmbientLightTracker.evaluateDarkState(currentDark = false, lux = 20.0f))
+
+        // Temporal confirmation and cooldown checks
+        assertFalse(
+            "Should not commit transition during post-transition cooldown",
+            AmbientLightTracker.shouldCommitTransition(targetDark = true, candidateElapsedMs = 3_000L, sinceLastTransitionMs = 2_000L)
+        )
+        assertFalse(
+            "Should not commit dark transition before ENTER_DARK_CONFIRM_MS",
+            AmbientLightTracker.shouldCommitTransition(targetDark = true, candidateElapsedMs = 1_500L, sinceLastTransitionMs = 10_000L)
+        )
+        assertTrue(
+            "Should commit dark transition after ENTER_DARK_CONFIRM_MS and cooldown",
+            AmbientLightTracker.shouldCommitTransition(targetDark = true, candidateElapsedMs = 2_600L, sinceLastTransitionMs = 10_000L)
+        )
+        assertFalse(
+            "Should not commit bright transition before EXIT_DARK_CONFIRM_MS",
+            AmbientLightTracker.shouldCommitTransition(targetDark = false, candidateElapsedMs = 2_600L, sinceLastTransitionMs = 10_000L)
+        )
+        assertTrue(
+            "Should commit bright transition after EXIT_DARK_CONFIRM_MS and cooldown",
+            AmbientLightTracker.shouldCommitTransition(targetDark = false, candidateElapsedMs = 3_600L, sinceLastTransitionMs = 10_000L)
+        )
     }
 
     @Test

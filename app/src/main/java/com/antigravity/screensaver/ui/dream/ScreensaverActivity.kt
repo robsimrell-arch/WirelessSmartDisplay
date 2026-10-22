@@ -1,6 +1,9 @@
 package com.antigravity.screensaver.ui.dream
 
+import android.app.Activity
 import android.app.KeyguardManager
+import android.appwidget.AppWidgetHostView
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -10,7 +13,10 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.service.dreams.DreamService
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -31,10 +37,12 @@ import com.antigravity.screensaver.data.AlarmTriggerTracker
 import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.data.PreferencesManager
+import com.antigravity.screensaver.data.SmartHomeWidgetBridge
 import com.antigravity.screensaver.data.TiltSensorTracker
 import com.antigravity.screensaver.ui.settings.SettingsActivity
 import com.antigravity.screensaver.ui.theme.ScreenSaverTheme
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -59,6 +67,9 @@ class ScreensaverActivity : ComponentActivity() {
     private var hasGainedFocus = false
     private var lastBackPressTime = 0L
     private var isNavigatingToChild = false
+    private var automationHostView: AppWidgetHostView? = null
+    private var mountedWidgetId: Int = -1
+    private var pendingWidgetId: Int = -1
 
     companion object {
         const val EXTRA_LAUNCH_TARGET = "com.antigravity.screensaver.EXTRA_LAUNCH_TARGET"
@@ -68,6 +79,7 @@ class ScreensaverActivity : ComponentActivity() {
         const val TARGET_SETTINGS = "settings"
         const val TARGET_CLOCK = "clock"
         const val TARGET_SMART_HOME = "smart_home"
+        const val TARGET_SMART_HOME_AUTOMATION = "smart_home_automation"
 
         /**
          * Evaluates whether focus loss on ScreensaverActivity should yield and finish.
@@ -210,6 +222,10 @@ class ScreensaverActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        try {
+            SmartHomeWidgetBridge.getHost(this).startListening()
+        } catch (_: Exception) {}
+        ensureAutomationWidgetMounted()
         alarmTriggerTracker = AlarmTriggerTracker(this) {
             android.util.Log.i("ScreensaverActivity", "Alarm event detected! Finishing ScreensaverActivity to reveal AlarmActivity.")
             finish()
@@ -219,6 +235,9 @@ class ScreensaverActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        try {
+            SmartHomeWidgetBridge.getHost(this).stopListening()
+        } catch (_: Exception) {}
         alarmTriggerTracker?.stop()
         alarmTriggerTracker = null
         hasGainedFocus = false
@@ -227,6 +246,7 @@ class ScreensaverActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isNavigatingToChild = false
+        ensureAutomationWidgetMounted()
         hideSystemBars()
     }
 
@@ -268,6 +288,7 @@ class ScreensaverActivity : ComponentActivity() {
             TARGET_SETTINGS -> launchSettings()
             TARGET_CLOCK -> launchClockTarget()
             TARGET_SMART_HOME -> launchSmartHomeTarget(provider)
+            TARGET_SMART_HOME_AUTOMATION -> launchSmartHomeAutomationTarget(provider)
         }
     }
 
@@ -396,6 +417,228 @@ class ScreensaverActivity : ComponentActivity() {
     fun launchSmartHomeTarget(provider: String? = null) {
         isNavigatingToChild = true
         performLaunchSmartHome(provider)
+    }
+
+    /**
+     * Launches the configured Smart Home Automation (e.g. "Lights Out") directly via
+     * Google Home's native Favorites Widget bridge (`RunAutomation`), keeping
+     * ScreensaverActivity active without calling Gemini or opening the Automations tab.
+     */
+    fun launchSmartHomeAutomationTarget(provider: String? = null) {
+        performLaunchSmartHomeAutomation(provider)
+    }
+
+    private fun ensureAutomationWidgetMounted() {
+        val widgetId = preferencesManager.getSettings().smartHomeAutomationWidgetId
+        if (!SmartHomeWidgetBridge.isWidgetValid(this, widgetId)) {
+            automationHostView?.let { oldView ->
+                (oldView.parent as? ViewGroup)?.removeView(oldView)
+            }
+            automationHostView = null
+            mountedWidgetId = -1
+            return
+        }
+        if (automationHostView != null && mountedWidgetId == widgetId) {
+            return
+        }
+
+        val decorGroup = window.decorView as? ViewGroup ?: return
+        automationHostView?.let { oldView ->
+            (oldView.parent as? ViewGroup)?.removeView(oldView)
+        }
+
+        val hostView = SmartHomeWidgetBridge.createPreparedHostView(this, widgetId) ?: return
+        val density = resources.displayMetrics.density
+        val widthPx = (200f * density).toInt()
+        val heightPx = (120f * density).toInt()
+
+        hostView.alpha = 0f
+        hostView.translationX = -10000f
+        hostView.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+
+        decorGroup.addView(hostView, FrameLayout.LayoutParams(widthPx, heightPx))
+        automationHostView = hostView
+        mountedWidgetId = widgetId
+    }
+
+    private fun performLaunchSmartHomeAutomation(provider: String?) {
+        val pm = packageManager
+        val settings = preferencesManager.getSettings()
+        val targetProvider = provider ?: settings.smartHomeProvider
+        val label = settings.smartHomeAutomationLabel.trim().ifEmpty { "Lights Out" }
+        val customUri = settings.smartHomeAutomationIntentUri.trim()
+
+        // 1. Custom shortcut / deep-link Intent URI if configured
+        if (customUri.isNotEmpty()) {
+            try {
+                isNavigatingToChild = true
+                val parsedIntent = if (customUri.startsWith("intent:", ignoreCase = true)) {
+                    Intent.parseUri(customUri, Intent.URI_INTENT_SCHEME)
+                } else {
+                    Intent(Intent.ACTION_VIEW, Uri.parse(customUri))
+                }
+                parsedIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                startActivity(parsedIntent)
+                Toast.makeText(this, "Running $label…", Toast.LENGTH_SHORT).show()
+                return
+            } catch (e: Exception) {
+                isNavigatingToChild = false
+                android.util.Log.e("ScreensaverActivity", "Failed custom automation URI: ${e.message}")
+            }
+        }
+
+        // 2. Direct 1-tap execution via bound Google Home / Alexa Favorites Widget
+        val widgetId = settings.smartHomeAutomationWidgetId
+        if (SmartHomeWidgetBridge.isWidgetValid(this, widgetId)) {
+            ensureAutomationWidgetMounted()
+            val result = SmartHomeWidgetBridge.triggerAutomationInHostView(automationHostView, label)
+            if (result == SmartHomeWidgetBridge.TriggerResult.TRIGGERED) {
+                Toast.makeText(this, "Running $label…", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // If Glance RemoteViews are still inflating, request an update and retry once
+            val info = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)
+            if (info != null) {
+                SmartHomeWidgetBridge.applyStandardWidgetOptions(this, widgetId, info)
+            }
+            Toast.makeText(this, "Running $label…", Toast.LENGTH_SHORT).show()
+            lifecycleScope.launch {
+                delay(400L)
+                val retry = SmartHomeWidgetBridge.triggerAutomationInHostView(automationHostView, label)
+                if (retry != SmartHomeWidgetBridge.TriggerResult.TRIGGERED) {
+                    Toast.makeText(
+                        this@ScreensaverActivity,
+                        "Select '$label' in Google Home widget setup",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    startBindAndConfigureAutomationWidget(targetProvider, label)
+                }
+            }
+            return
+        }
+
+        // 3. First-time setup: bind Google Home Favorites Widget so "Lights Out" runs in 1 tap
+        if (startBindAndConfigureAutomationWidget(targetProvider, label)) {
+            return
+        }
+
+        // 4. Fallback if provider app / widget is not installed
+        if (targetProvider.equals("alexa", ignoreCase = true)) {
+            try {
+                isNavigatingToChild = true
+                val alexaRoutinesIntent = Intent(Intent.ACTION_VIEW, Uri.parse("alexa://routines")).apply {
+                    setPackage("com.amazon.dee.app")
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                if (alexaRoutinesIntent.resolveActivity(pm) != null) {
+                    startActivity(alexaRoutinesIntent)
+                    Toast.makeText(this, "Opening Alexa Routines ($label)…", Toast.LENGTH_SHORT).show()
+                    return
+                }
+            } catch (e: Exception) {
+                isNavigatingToChild = false
+                android.util.Log.e("ScreensaverActivity", "Failed Alexa routines deep link: ${e.message}")
+            }
+            performLaunchSmartHome("alexa")
+        } else {
+            performLaunchSmartHome("google")
+        }
+    }
+
+    fun startBindAndConfigureAutomationWidget(providerKey: String, label: String): Boolean {
+        val providerInfo = SmartHomeWidgetBridge.findWidgetProvider(this, providerKey) ?: return false
+        return try {
+            isNavigatingToChild = true
+            val host = SmartHomeWidgetBridge.getHost(this)
+            val appWidgetId = host.allocateAppWidgetId()
+            pendingWidgetId = appWidgetId
+            val mgr = AppWidgetManager.getInstance(this)
+
+            Toast.makeText(
+                this,
+                "One-time setup: select '$label' in Google Home to enable 1-tap run",
+                Toast.LENGTH_LONG
+            ).show()
+
+            if (mgr.bindAppWidgetIdIfAllowed(appWidgetId, providerInfo.provider)) {
+                launchWidgetConfigureOrFinish(appWidgetId)
+            } else {
+                val bindIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, providerInfo.provider)
+                }
+                @Suppress("DEPRECATION")
+                startActivityForResult(bindIntent, SmartHomeWidgetBridge.REQUEST_CODE_BIND_WIDGET)
+            }
+            true
+        } catch (e: Exception) {
+            isNavigatingToChild = false
+            android.util.Log.e("ScreensaverActivity", "Failed to bind automation widget: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun launchWidgetConfigureOrFinish(appWidgetId: Int) {
+        val mgr = AppWidgetManager.getInstance(this)
+        val info = mgr.getAppWidgetInfo(appWidgetId)
+        if (info?.configure != null) {
+            isNavigatingToChild = true
+            val launched = SmartHomeWidgetBridge.startConfigureActivity(this, appWidgetId)
+            if (!launched) {
+                isNavigatingToChild = false
+            }
+        } else {
+            onAutomationWidgetConfigured(appWidgetId)
+        }
+    }
+
+    private fun onAutomationWidgetConfigured(appWidgetId: Int) {
+        val oldId = preferencesManager.getSettings().smartHomeAutomationWidgetId
+        if (oldId > 0 && oldId != appWidgetId) {
+            try {
+                SmartHomeWidgetBridge.getHost(this).deleteAppWidgetId(oldId)
+            } catch (_: Exception) {}
+        }
+        preferencesManager.setSmartHomeAutomationWidgetId(appWidgetId)
+        pendingWidgetId = -1
+        ensureAutomationWidgetMounted()
+        val label = preferencesManager.getSettings().smartHomeAutomationLabel.trim().ifEmpty { "Lights Out" }
+        Toast.makeText(this, "$label linked! Tap '$label' anytime to run it directly.", Toast.LENGTH_SHORT).show()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        val widgetId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId) ?: pendingWidgetId
+
+        when (requestCode) {
+            SmartHomeWidgetBridge.REQUEST_CODE_BIND_WIDGET -> {
+                if (resultCode == Activity.RESULT_OK && widgetId > 0) {
+                    launchWidgetConfigureOrFinish(widgetId)
+                } else {
+                    if (widgetId > 0) {
+                        try {
+                            SmartHomeWidgetBridge.getHost(this).deleteAppWidgetId(widgetId)
+                        } catch (_: Exception) {}
+                    }
+                    pendingWidgetId = -1
+                }
+            }
+            SmartHomeWidgetBridge.REQUEST_CODE_CONFIGURE_WIDGET -> {
+                if (resultCode == Activity.RESULT_OK && widgetId > 0) {
+                    onAutomationWidgetConfigured(widgetId)
+                } else {
+                    if (widgetId > 0) {
+                        try {
+                            SmartHomeWidgetBridge.getHost(this).deleteAppWidgetId(widgetId)
+                        } catch (_: Exception) {}
+                    }
+                    pendingWidgetId = -1
+                }
+            }
+        }
     }
 
     private fun performLaunchSmartHome(provider: String?) {

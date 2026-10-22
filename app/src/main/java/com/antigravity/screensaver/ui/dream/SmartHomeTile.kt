@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,22 +66,37 @@ fun openAlexa(context: Context) {
     }
 }
 
+fun triggerSmartHomeAutomation(context: Context, provider: String = "google") {
+    try {
+        ScreensaverActivity.launch(context, ScreensaverActivity.TARGET_SMART_HOME_AUTOMATION, provider)
+    } catch (e: Exception) {
+        android.util.Log.e("SmartHomeAutomation", "ScreensaverActivity launch failed: ${e.message}")
+    }
+}
+
 val AlexaCyan = Color(0xFF00CAFF)
 
 /**
- * Standalone Smart Home launcher tile supporting Google Home or Amazon Alexa.
- * - Portrait mode: Uses a stacked header (Icon badge on left, OpenInNew on right, full-width title & subtitle below)
- *   so "Google Home" / "Amazon Alexa" never wraps or truncates in narrow portrait columns.
- * - Landscape mode: Places "Google Home" / "Amazon Alexa" on the top row right next to the icon badge
- *   so "Smart Controls" sits cleanly below with plenty of vertical room.
+ * Standalone Smart Home launcher tile supporting Google Home or Amazon Alexa,
+ * plus an optional bottom pill button to trigger an automation (e.g. "Lights Out").
  *
- * Tap: launches selected smart home app
+ * - Portrait mode: Uses a stacked header (Icon badge on left, OpenInNew on right, full-width title below)
+ *   so "Google Home" / "Amazon Alexa" never wraps or truncates in narrow portrait columns.
+ *   When the automation pill is enabled, "Smart Controls" is replaced by the full-width "Lights Out" pill
+ *   so neither title nor button ever truncates.
+ * - Landscape mode: Places "Google Home" / "Amazon Alexa" on the top row right next to the icon badge
+ *   with the "Lights Out" pill (or "Smart Controls") cleanly below.
+ *
+ * Tap card/header: launches selected smart home app
+ * Tap automation pill: triggers automation / opens Automations tab
  * Long press: opens Smart Home quick settings sheet
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SmartHomeTile(
     provider: String = "google",
+    showAutomation: Boolean = true,
+    automationLabel: String = "Lights Out",
     nightMode: Boolean = false,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -112,6 +128,7 @@ fun SmartHomeTile(
     val title = if (isAlexa) "Amazon Alexa" else "Google Home"
     val icon = if (isAlexa) Icons.Rounded.GraphicEq else Icons.Rounded.Home
     val openDescription = if (isAlexa) "Open Amazon Alexa" else "Open Google Home"
+    val displayAutomationLabel = automationLabel.trim().ifEmpty { "Lights Out" }
     val shape = RoundedCornerShape(18.dp)
 
     Box(
@@ -139,13 +156,100 @@ fun SmartHomeTile(
             .padding(horizontal = 12.dp, vertical = if (isLandscape) 8.dp else 10.dp)
     ) {
         if (isLandscape) {
-            // Landscape: Title moved up next to the icon badge, making ample vertical room for "Smart Controls" below
+            // Landscape: Title next to icon badge on top row; Automation pill (or "Smart Controls") below
             Column(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .background(
+                                if (nightMode) Color(0x33FFA726) else primaryColor.copy(alpha = 0.20f),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = primaryColor.copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = openDescription,
+                        tint = primaryColor.copy(alpha = 0.85f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(5.dp))
+
+                if (showAutomation) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(primaryColor.copy(alpha = 0.18f))
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AutomationPillButton(
+                        label = displayAutomationLabel,
+                        primaryColor = primaryColor,
+                        textColor = textColor,
+                        nightMode = nightMode,
+                        onClick = { triggerSmartHomeAutomation(context, provider) },
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Text(
+                        text = "Smart Controls",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        color = secondaryColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        } else {
+            // Portrait: Stacked layout so "Google Home" / "Amazon Alexa" and "Lights Out" each get full column width
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -170,20 +274,6 @@ fun SmartHomeTile(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text(
-                        text = title,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = openDescription,
@@ -195,69 +285,35 @@ fun SmartHomeTile(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Smart Controls",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = secondaryColor,
+                    text = title,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
-        } else {
-            // Portrait: Unchanged stacked layout
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+
+                Spacer(modifier = Modifier.height(5.dp))
+
+                if (showAutomation) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
-                            .background(
-                                if (nightMode) Color(0x33FFA726) else primaryColor.copy(alpha = 0.20f),
-                                RoundedCornerShape(9.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = primaryColor.copy(alpha = 0.45f),
-                                shape = RoundedCornerShape(9.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = primaryColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
-                        contentDescription = openDescription,
-                        tint = primaryColor.copy(alpha = 0.85f),
-                        modifier = Modifier.size(16.dp)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(primaryColor.copy(alpha = 0.18f))
                     )
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textColor,
-                        softWrap = true,
-                        maxLines = 1
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AutomationPillButton(
+                        label = displayAutomationLabel,
+                        primaryColor = primaryColor,
+                        textColor = textColor,
+                        nightMode = nightMode,
+                        onClick = { triggerSmartHomeAutomation(context, provider) },
+                        onLongClick = onLongClick
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                } else {
                     Text(
                         text = "Smart Controls",
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -274,4 +330,52 @@ fun SmartHomeTile(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AutomationPillButton(
+    label: String,
+    primaryColor: Color,
+    textColor: Color,
+    nightMode: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val pillShape = RoundedCornerShape(7.dp)
+    val pillBg = if (nightMode) Color(0x33FFA726) else primaryColor.copy(alpha = 0.22f)
+    val pillBorder = if (nightMode) NightAmber.copy(alpha = 0.55f) else primaryColor.copy(alpha = 0.50f)
 
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(pillShape)
+            .background(pillBg, pillShape)
+            .border(width = 1.dp, color = pillBorder, shape = pillShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(horizontal = 8.dp, vertical = 2.5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.PowerSettingsNew,
+                contentDescription = null,
+                tint = primaryColor,
+                modifier = Modifier.size(11.5.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}

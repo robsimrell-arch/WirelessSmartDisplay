@@ -321,7 +321,9 @@ fun SmartDisplayScreen(
                     floodlightTimeoutJob?.cancel()
                     showBrightnessIndicator = false
                 } else if (settings.nightModeEnabled && settings.tapToToggleNight) {
-                    nightMode = !nightMode
+                    val nextNight = !nightMode
+                    nightMode = nextNight
+                    lightTracker.notifyManualToggle(nextNight)
                     showBrightnessIndicator = false
                 }
             },
@@ -429,7 +431,9 @@ fun SmartDisplayScreen(
                 // FULL COLOR MODE (2-column non-scrolling grid layout)
                 val onClockTap: () -> Unit = {
                     if (settings.nightModeEnabled && settings.tapToToggleNight) {
-                        nightMode = !nightMode
+                        val nextNight = !nightMode
+                        nightMode = nextNight
+                        lightTracker.notifyManualToggle(nextNight)
                         showBrightnessIndicator = false
                     }
                 }
@@ -591,7 +595,10 @@ fun SmartDisplayScreen(
                 ) {
                     Surface(
                         onClick = {
-                            if (!nightMode) nightMode = true
+                            if (!nightMode) {
+                                nightMode = true
+                                lightTracker.notifyManualToggle(true)
+                            }
                             nightBrightness = (nightBrightness - 0.05f).coerceIn(0.01f, 1.0f)
                             prefsManager.setNightBrightness(nightBrightness)
                             hideIndicatorJob?.cancel()
@@ -629,7 +636,10 @@ fun SmartDisplayScreen(
 
                     Surface(
                         onClick = {
-                            if (!nightMode) nightMode = true
+                            if (!nightMode) {
+                                nightMode = true
+                                lightTracker.notifyManualToggle(true)
+                            }
                             nightBrightness = (nightBrightness + 0.05f).coerceIn(0.01f, 1.0f)
                             prefsManager.setNightBrightness(nightBrightness)
                             hideIndicatorJob?.cancel()
@@ -843,6 +853,8 @@ private fun TilesDashboardGrid(
                 add { mod ->
                     SmartHomeTile(
                         provider = settings.smartHomeProvider,
+                        showAutomation = settings.showSmartHomeAutomation,
+                        automationLabel = settings.smartHomeAutomationLabel,
                         nightMode = false,
                         onLongClick = { onOpenTileSheet(ActiveTileSheet.SMART_HOME) },
                         modifier = mod

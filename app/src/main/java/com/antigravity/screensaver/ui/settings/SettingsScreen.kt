@@ -76,6 +76,7 @@ import com.antigravity.screensaver.data.DoNotDisturbController
 import com.antigravity.screensaver.data.DreamSystemSettingsController
 import com.antigravity.screensaver.data.LocationController
 import com.antigravity.screensaver.data.PreferencesManager
+import com.antigravity.screensaver.data.SmartHomeWidgetBridge
 import com.antigravity.screensaver.data.TiltSensorTracker
 import com.antigravity.screensaver.model.DisplaySettings
 import com.antigravity.screensaver.ui.theme.NightAmber
@@ -99,7 +100,10 @@ import com.antigravity.screensaver.ui.theme.TextSecondaryMuted
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    onLinkSmartHomeAutomation: ((String, String) -> Unit)? = null
+) {
     val context = LocalContext.current
     val prefsManager = remember { PreferencesManager(context) }
     val dndController = remember { DoNotDisturbController.getInstance(context) }
@@ -110,6 +114,12 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     var hasLocationPermission by remember { mutableStateOf(locationController.hasPermission()) }
     var currentTiltAngle by remember { mutableStateOf(0f) }
     var settings by remember { mutableStateOf(prefsManager.getSettings()) }
+
+    LaunchedEffect(Unit) {
+        prefsManager.settingsFlow().collect { latest ->
+            settings = latest
+        }
+    }
 
     LaunchedEffect(Unit) {
         hasDndPermission = dndController.hasPermission()
@@ -908,6 +918,65 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                                     )
                                 }
                             }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SettingsToggleItem(
+                        title = "Show Automation Button",
+                        summary = "Display quick-trigger automation pill (e.g. \"Lights Out\") on the Smart Home tile",
+                        checked = settings.showSmartHomeAutomation,
+                        onCheckedChange = { update(settings.copy(showSmartHomeAutomation = it)) }
+                    )
+
+                    if (settings.showSmartHomeAutomation) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = settings.smartHomeAutomationLabel,
+                            onValueChange = { update(settings.copy(smartHomeAutomationLabel = it)) },
+                            label = { Text("Automation Button Label") },
+                            placeholder = { Text("Lights Out", color = TextSecondaryMuted) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimaryWhite,
+                                unfocusedTextColor = TextPrimaryWhite,
+                                focusedBorderColor = PixelBlue,
+                                unfocusedBorderColor = Color(0x44FFFFFF)
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val isWidgetLinked = SmartHomeWidgetBridge.isWidgetValid(
+                            context,
+                            settings.smartHomeAutomationWidgetId
+                        )
+                        val label = settings.smartHomeAutomationLabel.trim().ifEmpty { "Lights Out" }
+                        OutlinedButton(
+                            onClick = {
+                                onLinkSmartHomeAutomation?.invoke(settings.smartHomeProvider, label)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isWidgetLinked) PixelGreen else PixelBlue
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isWidgetLinked) Icons.Rounded.CheckCircle else Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isWidgetLinked) {
+                                    "Linked to Google Home ($label) • Tap to Change"
+                                } else {
+                                    "Link '$label' in Google Home (1-Tap Run)"
+                                },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
