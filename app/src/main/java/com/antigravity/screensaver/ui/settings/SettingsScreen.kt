@@ -493,7 +493,7 @@ fun SettingsScreen(
 
                 SettingsToggleItem(
                     title = "Do Not Disturb in Night Mode",
-                    summary = "Automatically turn on Priority DND during night mode; restores previous state on wake or when room lights turn on.",
+                    summary = "Enables Priority Only DND (allowing starred contacts, priority conversations, reminders, events, and alarms) while suppressing all visual popups and screen flashes.",
                     checked = settings.enableDndInNightMode,
                     onCheckedChange = { update(settings.copy(enableDndInNightMode = it)) }
                 )

@@ -292,6 +292,23 @@ class ScreenSaverUnitTest {
             "Should NOT restore on exit if screensaver was not managing DND",
             DoNotDisturbController.evaluateShouldRestore(isManagingDnd = false)
         )
+
+        // Night mode Priority Only categories & visual flash suppression
+        val categories = DoNotDisturbController.NIGHT_MODE_PRIORITY_CATEGORIES
+        assertTrue("Must allow CONVERSATIONS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_CONVERSATIONS) != 0)
+        assertTrue("Must allow MESSAGES", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_MESSAGES) != 0)
+        assertTrue("Must allow CALLS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_CALLS) != 0)
+        assertTrue("Must allow REPEAT_CALLERS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_REPEAT_CALLERS) != 0)
+        assertTrue("Must allow REMINDERS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_REMINDERS) != 0)
+        assertTrue("Must allow EVENTS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_EVENTS) != 0)
+        assertTrue("Must allow ALARMS", (categories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0)
+
+        val mask = DoNotDisturbController.NIGHT_MODE_SUPPRESSED_VISUAL_EFFECTS
+        assertTrue("Must suppress PEEK (heads-up)", (mask and NotificationManager.Policy.SUPPRESSED_EFFECT_PEEK) != 0)
+        assertTrue("Must suppress AMBIENT pulse", (mask and NotificationManager.Policy.SUPPRESSED_EFFECT_AMBIENT) != 0)
+        assertTrue("Must suppress SCREEN_ON flash", (mask and NotificationManager.Policy.SUPPRESSED_EFFECT_SCREEN_ON) != 0)
+        assertTrue("Must suppress SCREEN_OFF wake", (mask and NotificationManager.Policy.SUPPRESSED_EFFECT_SCREEN_OFF) != 0)
+        assertTrue("Must suppress LIGHTS", (mask and NotificationManager.Policy.SUPPRESSED_EFFECT_LIGHTS) != 0)
     }
 
     @Test

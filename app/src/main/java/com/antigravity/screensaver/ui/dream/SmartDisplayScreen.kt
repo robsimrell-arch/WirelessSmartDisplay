@@ -1,8 +1,13 @@
 package com.antigravity.screensaver.ui.dream
 
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.view.HapticFeedbackConstants
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -196,11 +201,54 @@ fun SmartDisplayScreen(
         }
     }
 
-    // DND sync with nightMode
+    // DND sync with nightMode (turns off all notifications & visual pulses, with broadcast + periodic watchdog)
+    DisposableEffect(nightMode, settings.enableDndInNightMode) {
+        var dndReceiver: BroadcastReceiver? = null
+        if (nightMode && settings.enableDndInNightMode) {
+            dndController.activateDnd()
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    if (nightMode && settings.enableDndInNightMode) {
+                        dndController.enforceDnd()
+                    }
+                }
+            }
+            val filter = IntentFilter().apply {
+                addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+                addAction(NotificationManager.ACTION_NOTIFICATION_POLICY_CHANGED)
+            }
+            try {
+                ContextCompat.registerReceiver(
+                    context,
+                    receiver,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED
+                )
+                dndReceiver = receiver
+            } catch (_: Exception) {}
+        } else {
+            dndController.deactivateDnd()
+        }
+
+        onDispose {
+            dndReceiver?.let {
+                try {
+                    context.unregisterReceiver(it)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     LaunchedEffect(nightMode, settings.enableDndInNightMode) {
         if (settings.enableDndInNightMode) {
             if (nightMode) {
                 dndController.activateDnd()
+                while (true) {
+                    delay(10_000L)
+                    if (nightMode && settings.enableDndInNightMode) {
+                        dndController.enforceDnd()
+                    }
+                }
             } else {
                 dndController.deactivateDnd()
             }
@@ -241,7 +289,8 @@ fun SmartDisplayScreen(
     }
 
     val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE ||
+        configuration.screenWidthDp > configuration.screenHeightDp
 
     var lastHapticPercent by remember { mutableStateOf((nightBrightness * 100).roundToInt()) }
 

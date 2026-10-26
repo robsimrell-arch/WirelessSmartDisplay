@@ -69,6 +69,7 @@ class WirelessChargingDreamService : DreamService(),
     private lateinit var preferencesManager: PreferencesManager
     private var batteryReceiver: BroadcastReceiver? = null
     private var orientationJob: Job? = null
+    private var settingsJob: Job? = null
     private var currentAppliedOrientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     private var tiltSensorTracker: TiltSensorTracker? = null
     private var tiltJob: Job? = null
@@ -77,22 +78,50 @@ class WirelessChargingDreamService : DreamService(),
     private var hasGainedWindowFocus = false
 
     private fun applyOrientation(mode: String) {
-        val forcedOrientation = when (mode) {
-            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> null
+        when (mode) {
+            "portrait" -> {
+                orientationJob?.cancel()
+                orientationJob = null
+                setScreenOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, forceUpdate = true)
+                return
+            }
+            "system" -> {
+                orientationJob?.cancel()
+                orientationJob = null
+                setScreenOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, forceUpdate = true)
+                return
+            }
+            "landscape" -> {
+                val currentSensor = tiltSensorTracker?.getCurrentOrientation(this, awaitSensorMs = 80L)
+                val initialLandscape = if (
+                    currentSensor == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                    currentSensor == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                ) {
+                    currentSensor
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
+                setScreenOrientation(initialLandscape, forceUpdate = true)
+                orientationJob?.cancel()
+                orientationJob = CoroutineScope(Dispatchers.Main).launch {
+                    tiltSensorTracker?.orientationFlow()?.collect { desired ->
+                        if (desired == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                            desired == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                        ) {
+                            setScreenOrientation(desired)
+                        }
+                    }
+                }
+                return
+            }
         }
 
-        if (forcedOrientation != null) {
-            orientationJob?.cancel()
-            orientationJob = null
-            setScreenOrientation(forcedOrientation)
-            return
-        }
+        // "sensor" mode: dynamically track 3D orientation from hardware accelerometer gravity vector
+        // Eliminates AOSP's tilt cutoff and overrides Keyguard's portrait lock when pressing power button on a charger
+        val immediateSensorOrientation = tiltSensorTracker?.getCurrentOrientation(this, awaitSensorMs = 120L)
+            ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        setScreenOrientation(immediateSensorOrientation, forceUpdate = true)
 
-        // "sensor" mode: dynamically track 3D orientation from gravity vector
-        // Eliminates AOSP's tilt cutoff that caused ORIENTATION_UNKNOWN when propped up on a stand
         orientationJob?.cancel()
         orientationJob = CoroutineScope(Dispatchers.Main).launch {
             tiltSensorTracker?.orientationFlow()?.collect { desiredOrientation ->
@@ -101,21 +130,41 @@ class WirelessChargingDreamService : DreamService(),
         }
     }
 
-    private fun setScreenOrientation(desired: Int) {
-        if (currentAppliedOrientation != desired) {
+    private fun setScreenOrientation(desired: Int, forceUpdate: Boolean = false) {
+        if (forceUpdate || currentAppliedOrientation != desired) {
             android.util.Log.d(
                 "DreamService",
-                "Setting screen orientation to $desired (was $currentAppliedOrientation)"
+                "Setting screen orientation to $desired (was $currentAppliedOrientation, force=$forceUpdate)"
             )
             currentAppliedOrientation = desired
-            val lp = window.attributes
-            lp.screenOrientation = desired
-            window.attributes = lp
-            if (window != null && window.decorView.parent != null) {
-                try {
-                    windowManager?.updateViewLayout(window.decorView, lp)
-                } catch (t: Throwable) {
-                    android.util.Log.e("DreamService", "Failed to updateViewLayout for orientation: ${t.message}")
+
+            val w = window
+            if (w != null) {
+                val lp = w.attributes
+                lp.screenOrientation = desired
+                w.attributes = lp
+                if (w.decorView.parent != null) {
+                    try {
+                        windowManager?.updateViewLayout(w.decorView, lp)
+                    } catch (t: Throwable) {
+                        android.util.Log.e("DreamService", "Failed to updateViewLayout for orientation: ${t.message}")
+                    }
+                } else {
+                    // During onAttachedToWindow(), mDecor is not yet added to WindowManager until attach() finishes.
+                    // Post onto decorView so that once attach() calls addView(), orientation is enforced.
+                    w.decorView.post {
+                        try {
+                            val currentWindow = window
+                            if (currentWindow != null && currentWindow.decorView.parent != null) {
+                                val attrs = currentWindow.attributes
+                                if (attrs.screenOrientation != currentAppliedOrientation) {
+                                    attrs.screenOrientation = currentAppliedOrientation
+                                    currentWindow.attributes = attrs
+                                }
+                                windowManager?.updateViewLayout(currentWindow.decorView, attrs)
+                            }
+                        } catch (_: Throwable) {}
+                    }
                 }
             }
         }
@@ -296,18 +345,6 @@ class WirelessChargingDreamService : DreamService(),
 
         // Apply initial orientation synchronously to window attributes BEFORE inflating content
         val settings = preferencesManager.getSettings()
-        val initialOrientation = when (settings.orientationMode) {
-            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> tiltSensorTracker?.getCurrentOrientation() ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-        currentAppliedOrientation = initialOrientation
-        val initLp = window.attributes
-        initLp.screenOrientation = initialOrientation
-        window.attributes = initLp
-
-        // Start dynamic sensor orientation tracking if in sensor mode
         applyOrientation(settings.orientationMode)
 
         // Safe edge-to-edge system bar hiding via WindowCompat with transient swipe behavior
@@ -414,6 +451,23 @@ class WirelessChargingDreamService : DreamService(),
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
 
+        val initialSettings = preferencesManager.getSettings()
+        if (orientationJob == null) {
+            applyOrientation(initialSettings.orientationMode)
+        }
+
+        // Observe live changes to orientationMode while dreaming
+        settingsJob?.cancel()
+        var lastOrientationMode = initialSettings.orientationMode
+        settingsJob = CoroutineScope(Dispatchers.Main).launch {
+            preferencesManager.settingsFlow().collect { latest ->
+                if (latest.orientationMode != lastOrientationMode) {
+                    lastOrientationMode = latest.orientationMode
+                    applyOrientation(latest.orientationMode)
+                }
+            }
+        }
+
         // Alarm & Activity yield tracker: ensures Google Clock alarm screen displays immediately
         alarmTriggerTracker = AlarmTriggerTracker(this) {
             android.util.Log.i("DreamService", "Alarm/Activity trigger received! Waking up and terminating dream.")
@@ -431,7 +485,7 @@ class WirelessChargingDreamService : DreamService(),
 
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-        val settings = preferencesManager.getSettings()
+        val settings = initialSettings
 
         // If user explicitly enabled wirelessOnly in settings:
         if (settings.wirelessOnly) {
@@ -495,6 +549,8 @@ class WirelessChargingDreamService : DreamService(),
         tiltJob = null
         orientationJob?.cancel()
         orientationJob = null
+        settingsJob?.cancel()
+        settingsJob = null
         DoNotDisturbController.getInstance(this).reset()
         LocationController.getInstance(this).reset()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
@@ -515,6 +571,8 @@ class WirelessChargingDreamService : DreamService(),
         tiltJob = null
         orientationJob?.cancel()
         orientationJob = null
+        settingsJob?.cancel()
+        settingsJob = null
         if (lifecycleRegistry.currentState != Lifecycle.State.DESTROYED) {
             lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
             appViewModelStore.clear()
@@ -529,6 +587,8 @@ class WirelessChargingDreamService : DreamService(),
         tiltJob = null
         orientationJob?.cancel()
         orientationJob = null
+        settingsJob?.cancel()
+        settingsJob = null
         DoNotDisturbController.getInstance(this).reset()
         LocationController.getInstance(this).reset()
         if (lifecycleRegistry.currentState != Lifecycle.State.DESTROYED) {

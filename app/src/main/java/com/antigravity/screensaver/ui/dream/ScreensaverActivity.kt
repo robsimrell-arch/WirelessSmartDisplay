@@ -178,6 +178,16 @@ class ScreensaverActivity : ComponentActivity() {
         val settings = preferencesManager.getSettings()
         applyOrientation(settings.orientationMode)
 
+        var lastOrientationMode = settings.orientationMode
+        lifecycleScope.launch {
+            preferencesManager.settingsFlow().collect { latest ->
+                if (latest.orientationMode != lastOrientationMode) {
+                    lastOrientationMode = latest.orientationMode
+                    applyOrientation(latest.orientationMode)
+                }
+            }
+        }
+
         if (settings.requireProppedUp && tiltSensorTracker.hasSensor) {
             tiltJob?.cancel()
             tiltJob = lifecycleScope.launch {
@@ -736,22 +746,46 @@ class ScreensaverActivity : ComponentActivity() {
     }
 
     private fun applyOrientation(mode: String) {
-        val forcedOrientation = when (mode) {
-            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> null
-        }
-
-        if (forcedOrientation != null) {
-            orientationJob?.cancel()
-            orientationJob = null
-            requestedOrientation = forcedOrientation
-            return
+        when (mode) {
+            "portrait" -> {
+                orientationJob?.cancel()
+                orientationJob = null
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                return
+            }
+            "system" -> {
+                orientationJob?.cancel()
+                orientationJob = null
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                return
+            }
+            "landscape" -> {
+                val currentSensor = tiltSensorTracker.getCurrentOrientation(awaitSensorMs = 60L)
+                requestedOrientation = if (
+                    currentSensor == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                    currentSensor == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                ) {
+                    currentSensor
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
+                orientationJob?.cancel()
+                orientationJob = lifecycleScope.launch {
+                    tiltSensorTracker.orientationFlow().collect { desired ->
+                        if ((desired == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                                desired == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE) &&
+                            requestedOrientation != desired
+                        ) {
+                            requestedOrientation = desired
+                        }
+                    }
+                }
+                return
+            }
         }
 
         // Immediately set initial orientation synchronously to avoid portrait flash
-        val initialOrientation = tiltSensorTracker.getCurrentOrientation()
+        val initialOrientation = tiltSensorTracker.getCurrentOrientation(awaitSensorMs = 80L)
         if (requestedOrientation != initialOrientation) {
             requestedOrientation = initialOrientation
         }

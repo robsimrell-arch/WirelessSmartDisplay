@@ -49,6 +49,7 @@ class PreviewActivity : ComponentActivity() {
 
     private var tiltSensorTracker: TiltSensorTracker? = null
     private var tiltJob: Job? = null
+    private var orientationJob: Job? = null
     private val isFlatDarkened = MutableStateFlow(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,7 +63,24 @@ class PreviewActivity : ComponentActivity() {
             "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> tiltSensorTracker?.getCurrentOrientation() ?: ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            else -> tiltSensorTracker?.getCurrentOrientation(awaitSensorMs = 80L) ?: ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
+
+        if (settings.orientationMode == "sensor" || settings.orientationMode == "landscape") {
+            orientationJob = CoroutineScope(Dispatchers.Main).launch {
+                tiltSensorTracker?.orientationFlow()?.collect { desired ->
+                    if (settings.orientationMode == "landscape") {
+                        if ((desired == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                                desired == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE) &&
+                            requestedOrientation != desired
+                        ) {
+                            requestedOrientation = desired
+                        }
+                    } else if (requestedOrientation != desired) {
+                        requestedOrientation = desired
+                    }
+                }
+            }
         }
 
         // Keep screen on during preview
@@ -179,6 +197,8 @@ class PreviewActivity : ComponentActivity() {
         super.onDestroy()
         tiltJob?.cancel()
         tiltJob = null
+        orientationJob?.cancel()
+        orientationJob = null
         val lp = window.attributes
         lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         window.attributes = lp

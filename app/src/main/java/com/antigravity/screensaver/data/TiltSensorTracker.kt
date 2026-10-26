@@ -8,8 +8,13 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import android.view.Surface
 import android.view.WindowManager
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,53 +40,93 @@ class TiltSensorTracker(private val context: Context) {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
 
-    // Hardware accelerometer: rapid, low-latency, and immediately responsive
+    // Hardware accelerometer: rapid, low-latency, and immediately responsive even during power-button sleep transitions
     private val accelerometer: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     // Filtered gravity sensor
     private val gravitySensor: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
-    // Primary tilt sensor (prefer gravity, fallback to accelerometer)
-    private val tiltSensor: Sensor? = gravitySensor ?: accelerometer
+    // Primary tilt sensor: prefer hardware accelerometer so there is zero sensor-fusion lag or stall when pressing power button
+    private val tiltSensor: Sensor? = accelerometer ?: gravitySensor
 
-    val hasSensor: Boolean get() = tiltSensor != null || accelerometer != null
+    val hasSensor: Boolean get() = accelerometer != null || gravitySensor != null
 
     private val _currentInclineDegrees = MutableStateFlow(0f)
     val currentInclineDegrees: StateFlow<Float> = _currentInclineDegrees.asStateFlow()
 
+    @Volatile
     var lastComputedOrientation: Int = getSystemInitialOrientation(context)
         private set
 
-    fun getCurrentOrientation(): Int = lastComputedOrientation
+    @Volatile
+    var hasReceivedSensorSample: Boolean = false
+        private set
+
+    private val initialSampleLatch = CountDownLatch(1)
+    private var warmupThread: HandlerThread? = null
+
+    /**
+     * Returns the current physical 3D orientation of the device.
+     * If called immediately upon creation (e.g. inside DreamService.onAttachedToWindow before the
+     * main thread looper has processed callbacks), briefly awaits the background hardware accelerometer
+     * warmup sample so the initial orientation is accurate even when the lockscreen was in portrait.
+     */
+    fun getCurrentOrientation(currentContext: Context = context, awaitSensorMs: Long = 120L): Int {
+        if (hasSensor && !hasReceivedSensorSample && initialSampleLatch.count > 0 && Looper.myLooper() != warmupThread?.looper) {
+            try {
+                initialSampleLatch.await(awaitSensorMs, TimeUnit.MILLISECONDS)
+            } catch (_: InterruptedException) {}
+        }
+        if (!hasReceivedSensorSample) {
+            lastComputedOrientation = getSystemInitialOrientation(currentContext)
+        }
+        return lastComputedOrientation
+    }
 
     init {
         warmUpSensor()
     }
 
     /**
-     * Rapidly samples the hardware accelerometer upon tracker creation so that the device's
-     * physical orientation on a dock is known before the first frame is composed.
+     * Rapidly samples the hardware accelerometer on a dedicated background HandlerThread upon tracker creation
+     * so that the device's physical orientation on a dock is known synchronously before the first frame is composed,
+     * even while the main thread is executing onCreate() / onAttachedToWindow().
      */
     private fun warmUpSensor() {
-        val sm = sensorManager ?: return
-        val sensorToWarm = accelerometer ?: tiltSensor ?: return
+        val sm = sensorManager
+        val sensorToWarm = accelerometer ?: gravitySensor
+        if (sm == null || sensorToWarm == null) {
+            initialSampleLatch.countDown()
+            return
+        }
+
+        val thread = HandlerThread("TiltSensorWarmup").apply { start() }
+        warmupThread = thread
+        val bgHandler = Handler(thread.looper)
 
         val warmListener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 if (event != null && event.values.size >= 3) {
+                    val x = event.values[0]
+                    val y = event.values[1]
+                    val z = event.values[2]
+                    val magnitude = sqrt((x * x + y * y + z * z).toDouble())
+                    if (magnitude < 0.1) return
+
                     val computed = calculateScreenOrientation(
-                        event.values[0],
-                        event.values[1],
-                        event.values[2],
-                        lastComputedOrientation
+                        x,
+                        y,
+                        z,
+                        getSystemInitialOrientation(context)
                     )
                     lastComputedOrientation = computed
-                    val incline = calculateInclineDegrees(
-                        event.values[0],
-                        event.values[1],
-                        event.values[2]
-                    )
+                    hasReceivedSensorSample = true
+                    val incline = calculateInclineDegrees(x, y, z)
                     _currentInclineDegrees.value = incline
+                    initialSampleLatch.countDown()
                     try {
                         sm.unregisterListener(this)
+                    } catch (_: Throwable) {}
+                    try {
+                        thread.quitSafely()
                     } catch (_: Throwable) {}
                 }
             }
@@ -90,8 +135,24 @@ class TiltSensorTracker(private val context: Context) {
         }
 
         try {
-            sm.registerListener(warmListener, sensorToWarm, SensorManager.SENSOR_DELAY_FASTEST)
-        } catch (_: Throwable) {}
+            val registered = sm.registerListener(
+                warmListener,
+                sensorToWarm,
+                SensorManager.SENSOR_DELAY_GAME,
+                bgHandler
+            )
+            if (!registered) {
+                initialSampleLatch.countDown()
+                try {
+                    thread.quitSafely()
+                } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {
+            initialSampleLatch.countDown()
+            try {
+                thread.quitSafely()
+            } catch (_: Throwable) {}
+        }
     }
 
     companion object {
@@ -253,14 +314,14 @@ class TiltSensorTracker(private val context: Context) {
      * computed from 3D gravity, guaranteeing immediate orientation detection when resting propped up on a stand.
      */
     fun orientationFlow(): Flow<Int> = callbackFlow {
-        val activeSensor = tiltSensor ?: accelerometer
+        val activeSensor = accelerometer ?: tiltSensor
         if (sensorManager == null || activeSensor == null) {
             trySend(lastComputedOrientation)
             awaitClose {}
             return@callbackFlow
         }
 
-        var current = lastComputedOrientation
+        var current = getCurrentOrientation(context, awaitSensorMs = 50L)
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
@@ -271,9 +332,10 @@ class TiltSensorTracker(private val context: Context) {
                         event.values[2],
                         current
                     )
+                    hasReceivedSensorSample = true
+                    lastComputedOrientation = newOrientation
                     if (newOrientation != current) {
                         current = newOrientation
-                        lastComputedOrientation = newOrientation
                         trySend(newOrientation)
                     }
                 }
@@ -308,7 +370,7 @@ class TiltSensorTracker(private val context: Context) {
             return@callbackFlow
         }
 
-        var currentlyPropped = false
+        var currentlyPropped = true
         var flatGraceJob: Job? = null
         val scope = CoroutineScope(Dispatchers.Default)
 
